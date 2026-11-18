@@ -1,0 +1,18 @@
+{
+  "cases": {
+    "quantity_zero_422": true,
+    "term_over_schema_limit_422": true,
+    "amount_over_limit_422": true,
+    "inactive_customer_rejected": true,
+    "zero_income_rejected": true,
+    "term_37_business_rejection": true,
+    "rejections_created_no_reservation": true
+  },
+  "statuses": {
+    "inactive": "RECHAZADA",
+    "zero_income": "RECHAZADA",
+    "term_37": "RECHAZADA"
+  },
+  "loans_created": 3,
+  "passed": true
+}

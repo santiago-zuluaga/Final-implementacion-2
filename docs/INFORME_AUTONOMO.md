@@ -4,13 +4,13 @@
 
 ## Estado
 
-La solución implementa los cuatro dominios, su integración y los artefactos principales. La verificación actual cubre 44 de 72 requisitos trazados y 13 de 16 casos de aceptación; no se presenta como un cumplimiento del 100%. La [matriz de cumplimiento](MATRIZ_CUMPLIMIENTO.md) y el [registro de pruebas](PRUEBAS_ACEPTACION.md) muestran cada requisito y su evidencia.
+La solución implementa los cuatro dominios, su integración y los artefactos principales. La verificación actual cubre 45 de 72 requisitos trazados y 13 de 16 casos de aceptación; no se presenta como un cumplimiento del 100%. La [matriz de cumplimiento](MATRIZ_CUMPLIMIENTO.md) y el [registro de pruebas](PRUEBAS_ACEPTACION.md) muestran cada requisito y su evidencia.
 
 | Categoría | Requeridos | Implementados | Verificados | Pendientes |
 |---|---:|---:|---:|---:|
-| Requisitos obligatorios trazados en la matriz | 72 | 71 | 44 | 27 sin verificación + 1 bloqueado |
+| Requisitos obligatorios trazados en la matriz | 72 | 71 | 45 | 26 sin verificación + 1 bloqueado |
 
-El conteo se obtiene de las 72 filas requisito de la matriz: 44 `VERIFICADO`, 27 `IMPLEMENTADO_NO_VERIFICADO` y 1 `BLOQUEADO`. “Implementados” suma los verificados y los implementados que aún requieren evidencia.
+El conteo se obtiene de las 72 filas requisito de la matriz: 45 `VERIFICADO`, 26 `IMPLEMENTADO_NO_VERIFICADO` y 1 `BLOQUEADO`. “Implementados” suma los verificados y los implementados que aún requieren evidencia.
 
 ## Arquitectura y operación
 
@@ -38,12 +38,13 @@ La equivalencia local/API en las 200 solicitudes tuvo cero mismatches y error ab
 - Promoción y rollback después del reentrenamiento: API devolvió v2 y luego v1 después de reinicios; equivalencia v1 volvió a pasar en 200 solicitudes.
 - Persistencia RabbitMQ: la prueba leyó la publicación persistente antes y después del restart; eliminó la cola temporal al terminar.
 - MLflow Registry: las promociones v2/v1 movieron el alias `champion` entre versiones y run_ids correspondientes; API de Préstamos y alias coincidieron tras restart.
+- Validaciones integradas: se corrigió el acceso interno a perfiles inactivos, que antes impedía devolver `CLIENTE_INACTIVO`; el script comprobó 422 de esquema/monto, rechazo por cliente inactivo/ingreso cero/plazo inválido y ausencia de reservas.
 
 ## Pendientes y límites
 
 - Aceptación 14, 15 y 16 requieren comprobar el flujo visual desde frontend, polling de estado, expiración/mensajes y errores de API. El acceso del navegador a `http://localhost:8080` fue denegado por la autorización del origen en esta sesión; se respetó el bloqueo y no se usó una vía alternativa.
 - El grupo debe aportar nombres reales y contribuciones para completar la tabla académica; esos datos no estaban en los archivos disponibles y no se inventaron.
-- Siguen pendientes 27 requisitos de la matriz con implementación sin verificación completa y uno bloqueado. Entre ellos están validación exhaustiva de errores/API, auditoría de OpenAPI y timeout de una solicitud que permanezca pendiente.
+- Siguen pendientes 26 requisitos de la matriz con implementación sin verificación completa y uno bloqueado. Entre ellos están auditoría de OpenAPI y timeout de una solicitud que permanezca pendiente.
 - El entrenamiento completó, con avisos de compatibilidad de opciones del solver de scikit-learn y detección de núcleos físicos de joblib en Windows; no se ocultaron los avisos ni impidieron producir artefactos.
 
 ## Reproducción

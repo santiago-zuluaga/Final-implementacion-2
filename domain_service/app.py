@@ -361,7 +361,7 @@ def customer_create(body:CustomerIn,authorization:str|None=Header(None)):
     require('customers'); require_role(authorization,'ADMIN')
     with engine.begin() as c:
       c.execute(text('INSERT INTO customers(id,name,income,obligations,employment,tenure_months,history_months,prior_credits,late_payments,payment_on_time,active) VALUES(:id,:name,:income,:obligations,:employment,:tenure_months,:history_months,:prior_credits,:late_payments,:payment_on_time,:active) ON CONFLICT(id) DO UPDATE SET name=excluded.name,income=excluded.income,obligations=excluded.obligations,employment=excluded.employment,tenure_months=excluded.tenure_months,history_months=excluded.history_months,prior_credits=excluded.prior_credits,late_payments=excluded.late_payments,payment_on_time=excluded.payment_on_time,active=excluded.active,updated_at=now()'),body.model_dump())
-    return customer_row(body.id)
+    return customer_row(body.id,include_inactive=True)
 @app.get('/customers')
 def customer_list(authorization:str|None=Header(None)):
     require('customers')
@@ -374,12 +374,16 @@ def customer_get(id:str,authorization:str|None=Header(None),x_internal_token:str
     require('customers')
     if x_internal_token:
       require_internal(x_internal_token)
+      include_inactive=True
     else:
       actor=require_role(authorization,'ADMIN','CUSTOMER')
       if actor['role']=='CUSTOMER' and actor.get('customer_id')!=id: raise HTTPException(403,'Solo puedes consultar tu propio perfil')
-    return customer_row(id)
-def customer_row(id:str):
-    with engine.connect() as c: r=c.execute(text('SELECT * FROM customers WHERE id=:id AND active'),{'id':id}).mappings().first()
+      include_inactive=actor['role']=='ADMIN'
+    return customer_row(id,include_inactive)
+def customer_row(id:str,include_inactive:bool=False):
+    query='SELECT * FROM customers WHERE id=:id'
+    if not include_inactive: query+=' AND active'
+    with engine.connect() as c: r=c.execute(text(query),{'id':id}).mappings().first()
     if not r: raise HTTPException(404,'Customer not found')
     return dict(r)
 @app.put('/customers/{id}')
@@ -389,9 +393,13 @@ def customer_update(id:str,body:CustomerIn,authorization:str|None=Header(None)):
     if actor['role']=='CUSTOMER' and actor.get('customer_id')!=id: raise HTTPException(403,'Solo puedes actualizar tu propio perfil')
     if body.id!=id: raise HTTPException(422,'El id del perfil debe coincidir con la ruta')
     with engine.begin() as c:
-      r=c.execute(text('UPDATE customers SET name=:name,income=:income,obligations=:obligations,employment=:employment,tenure_months=:tenure_months,history_months=:history_months,prior_credits=:prior_credits,late_payments=:late_payments,payment_on_time=:payment_on_time,updated_at=now() WHERE id=:id AND active RETURNING id'),body.model_dump()).first()
+      if actor['role']=='ADMIN':
+        statement='UPDATE customers SET name=:name,income=:income,obligations=:obligations,employment=:employment,tenure_months=:tenure_months,history_months=:history_months,prior_credits=:prior_credits,late_payments=:late_payments,payment_on_time=:payment_on_time,active=:active,updated_at=now() WHERE id=:id RETURNING id'
+      else:
+        statement='UPDATE customers SET name=:name,income=:income,obligations=:obligations,employment=:employment,tenure_months=:tenure_months,history_months=:history_months,prior_credits=:prior_credits,late_payments=:late_payments,payment_on_time=:payment_on_time,updated_at=now() WHERE id=:id AND active RETURNING id'
+      r=c.execute(text(statement),body.model_dump()).first()
     if not r: raise HTTPException(404,'Customer not found')
-    return customer_row(id)
+    return customer_row(id,include_inactive=actor['role']=='ADMIN')
 @app.post('/customers/import')
 async def customer_import(file:UploadFile=File(...),authorization:str|None=Header(None)):
     require('customers'); require_role(authorization,'ADMIN'); content=(await file.read()).decode('utf-8-sig'); rows=list(csv.DictReader(io.StringIO(content))); inserted=updated=errors=0; details=[]
