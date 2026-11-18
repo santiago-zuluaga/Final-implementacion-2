@@ -1,0 +1,234 @@
+{
+  "data_sha256": "c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd",
+  "shape": [
+    12000,
+    15
+  ],
+  "class_rate": 0.3055833333333333,
+  "missing": {
+    "solicitud_id": 0,
+    "cliente_id": 0,
+    "ingresos_mensuales_cop": 0,
+    "obligaciones_mensuales_cop": 0,
+    "tipo_empleo": 93,
+    "antiguedad_laboral_meses": 91,
+    "meses_historial_crediticio": 97,
+    "creditos_previos": 0,
+    "atrasos_previos_30d": 0,
+    "porcentaje_pago_puntual": 2473,
+    "monto_solicitado_cop": 0,
+    "plazo_meses": 0,
+    "tasa_mensual_simulada": 0,
+    "cuota_estimada_cop": 0,
+    "incumplimiento_90d": 0
+  },
+  "partition_sizes": {
+    "train": 7200,
+    "validation": 2400,
+    "test": 2400
+  },
+  "selection_metric": "AP validation; ties ROC-AUC then simplicity",
+  "costs": {
+    "false_approve": 5,
+    "false_reject": 1
+  },
+  "threshold": 0.30499999999999994,
+  "candidates": [
+    {
+      "name": "dummy_prior",
+      "metrics_validation": {
+        "precision_1": 0.0,
+        "recall_1": 0.0,
+        "f1_1": 0.0,
+        "roc_auc": 0.5,
+        "average_precision": 0.30541666666666667,
+        "brier": 0.2121374035493827,
+        "confusion_matrix": [
+          [
+            1667,
+            0
+          ],
+          [
+            733,
+            0
+          ]
+        ]
+      },
+      "duration_seconds": 0.030926227569580078
+    },
+    {
+      "name": "logreg_c1",
+      "metrics_validation": {
+        "precision_1": 0.44813278008298757,
+        "recall_1": 0.5893587994542974,
+        "f1_1": 0.5091337654684738,
+        "roc_auc": 0.6962315585996034,
+        "average_precision": 0.5197293987624665,
+        "brier": 0.21744617586059475,
+        "confusion_matrix": [
+          [
+            1135,
+            532
+          ],
+          [
+            301,
+            432
+          ]
+        ]
+      },
+      "duration_seconds": 0.03436875343322754
+    },
+    {
+      "name": "logreg_c05",
+      "metrics_validation": {
+        "precision_1": 0.44813278008298757,
+        "recall_1": 0.5893587994542974,
+        "f1_1": 0.5091337654684738,
+        "roc_auc": 0.6962266482583429,
+        "average_precision": 0.5197211532977962,
+        "brier": 0.21744776700763094,
+        "confusion_matrix": [
+          [
+            1135,
+            532
+          ],
+          [
+            301,
+            432
+          ]
+        ]
+      },
+      "duration_seconds": 0.03309226036071777
+    },
+    {
+      "name": "tree_d5",
+      "metrics_validation": {
+        "precision_1": 0.45232558139534884,
+        "recall_1": 0.5306957708049114,
+        "f1_1": 0.4883866917765223,
+        "roc_auc": 0.6671713406295549,
+        "average_precision": 0.4728414884517158,
+        "brier": 0.22438794037218857,
+        "confusion_matrix": [
+          [
+            1196,
+            471
+          ],
+          [
+            344,
+            389
+          ]
+        ]
+      },
+      "duration_seconds": 0.04940080642700195
+    },
+    {
+      "name": "tree_d8",
+      "metrics_validation": {
+        "precision_1": 0.4117647058823529,
+        "recall_1": 0.5347885402455662,
+        "f1_1": 0.4652818991097923,
+        "roc_auc": 0.6509758075669997,
+        "average_precision": 0.46637054090734664,
+        "brier": 0.23423860615267866,
+        "confusion_matrix": [
+          [
+            1107,
+            560
+          ],
+          [
+            341,
+            392
+          ]
+        ]
+      },
+      "duration_seconds": 0.0550081729888916
+    },
+    {
+      "name": "forest_300",
+      "metrics_validation": {
+        "precision_1": 0.49511854951185497,
+        "recall_1": 0.4843110504774898,
+        "f1_1": 0.4896551724137931,
+        "roc_auc": 0.6856505915733633,
+        "average_precision": 0.4975515323852733,
+        "brier": 0.2055019506203044,
+        "confusion_matrix": [
+          [
+            1305,
+            362
+          ],
+          [
+            378,
+            355
+          ]
+        ]
+      },
+      "duration_seconds": 1.0745561122894287
+    },
+    {
+      "name": "forest_500",
+      "metrics_validation": {
+        "precision_1": 0.4844155844155844,
+        "recall_1": 0.5088676671214188,
+        "f1_1": 0.4963406520292748,
+        "roc_auc": 0.686032779801475,
+        "average_precision": 0.49817753293967665,
+        "brier": 0.21002434925831864,
+        "confusion_matrix": [
+          [
+            1270,
+            397
+          ],
+          [
+            360,
+            373
+          ]
+        ]
+      },
+      "duration_seconds": 1.7201788425445557
+    },
+    {
+      "name": "hist_150",
+      "metrics_validation": {
+        "precision_1": 0.584958217270195,
+        "recall_1": 0.286493860845839,
+        "f1_1": 0.38461538461538464,
+        "roc_auc": 0.6825100191421472,
+        "average_precision": 0.5023558141092077,
+        "brier": 0.19339661926555615,
+        "confusion_matrix": [
+          [
+            1518,
+            149
+          ],
+          [
+            523,
+            210
+          ]
+        ]
+      },
+      "duration_seconds": 0.25531530380249023
+    }
+  ],
+  "selected": "logreg_c1",
+  "test_metrics": {
+    "precision_1": 0.3447204968944099,
+    "recall_1": 0.9085948158253752,
+    "f1_1": 0.499812382739212,
+    "roc_auc": 0.6965891951214124,
+    "average_precision": 0.5322612983591699,
+    "brier": 0.21639658141008947,
+    "confusion_matrix": [
+      [
+        401,
+        1266
+      ],
+      [
+        67,
+        666
+      ]
+    ]
+  },
+  "mlflow_enabled": false
+}

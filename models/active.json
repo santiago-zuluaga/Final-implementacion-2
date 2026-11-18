@@ -1,0 +1,5 @@
+{
+  "model_version": "v1",
+  "manifest": "v1/manifest.json",
+  "artifact": "v1/pipeline.joblib"
+}
