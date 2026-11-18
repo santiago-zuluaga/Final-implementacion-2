@@ -1,0 +1,41 @@
+{
+  "n": 200,
+  "model_version": "v1",
+  "max_abs_error": 2.220446049250313e-16,
+  "mean_abs_error": 1.2906342661267445e-17,
+  "mismatch_count": 0,
+  "worst_rows": [
+    {
+      "row": 195,
+      "abs_error": 2.220446049250313e-16,
+      "local_probability": 0.8079100228982787,
+      "api_probability": 0.8079100228982785
+    },
+    {
+      "row": 193,
+      "abs_error": 1.1102230246251565e-16,
+      "local_probability": 0.5795989453441706,
+      "api_probability": 0.5795989453441704
+    },
+    {
+      "row": 128,
+      "abs_error": 1.1102230246251565e-16,
+      "local_probability": 0.7184284527389948,
+      "api_probability": 0.7184284527389947
+    },
+    {
+      "row": 139,
+      "abs_error": 1.1102230246251565e-16,
+      "local_probability": 0.47328697946521514,
+      "api_probability": 0.47328697946521525
+    },
+    {
+      "row": 133,
+      "abs_error": 1.1102230246251565e-16,
+      "local_probability": 0.8207066430688529,
+      "api_probability": 0.820706643068853
+    }
+  ],
+  "tolerance": 1e-09,
+  "equivalent": true
+}

@@ -2,9 +2,8 @@
 __pycache__/
 *.py[cod]
 mlruns/
-models/v*/
-!models/v*/pipeline.joblib
-!models/v*/manifest.json
+mlflow_data/
+mlflow_artifacts/
 .pytest_cache/
 node_modules/
 dist/

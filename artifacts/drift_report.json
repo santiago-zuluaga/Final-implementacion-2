@@ -1,0 +1,21 @@
+{
+  "baseline": "prestamos_entrenamiento.csv",
+  "comparison": "solicitudes_nuevas.csv (unlabeled; no performance metric)",
+  "features": {
+    "ingresos_mensuales_cop": 0.055230876690334815,
+    "obligaciones_mensuales_cop": 0.031885685774399486,
+    "antiguedad_laboral_meses": 0.11803329763488317,
+    "meses_historial_crediticio": 0.07092215465485686,
+    "creditos_previos": 0.0084293909135678,
+    "atrasos_previos_30d": 0.00817960839106457,
+    "porcentaje_pago_puntual": 0.05485281251327231,
+    "monto_solicitado_cop": 0.11199872796076472,
+    "plazo_meses": 0.02378018000864152,
+    "cuota_estimada_cop": 0.03045364086508677,
+    "sin_historial": 0.0,
+    "ratio_endeudamiento": 0.051827384545700975,
+    "cuota_ingreso": 0.03807993511070416
+  },
+  "threshold": 0.2,
+  "drifted": []
+}

@@ -1,0 +1,69 @@
+{
+  "model_version": "v1",
+  "run_id": "52f617e25f71447da4234cb8c04ba4b9",
+  "mlflow_run_id": "52f617e25f71447da4234cb8c04ba4b9",
+  "dataset_sha256": "c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd",
+  "features": [
+    "ingresos_mensuales_cop",
+    "obligaciones_mensuales_cop",
+    "antiguedad_laboral_meses",
+    "meses_historial_crediticio",
+    "creditos_previos",
+    "atrasos_previos_30d",
+    "porcentaje_pago_puntual",
+    "monto_solicitado_cop",
+    "plazo_meses",
+    "cuota_estimada_cop",
+    "sin_historial",
+    "ratio_endeudamiento",
+    "cuota_ingreso",
+    "tipo_empleo"
+  ],
+  "positive_class": 1,
+  "threshold": 0.30499999999999994,
+  "selection_metric": "average_precision_validation",
+  "tie_breaker": "roc_auc_validation_then_simplicity",
+  "validation_metrics": {
+    "precision_1": 0.44813278008298757,
+    "recall_1": 0.5893587994542974,
+    "f1_1": 0.5091337654684738,
+    "roc_auc": 0.6962315585996034,
+    "average_precision": 0.5197293987624665,
+    "brier": 0.21744617586059473,
+    "confusion_matrix": [
+      [
+        1135,
+        532
+      ],
+      [
+        301,
+        432
+      ]
+    ]
+  },
+  "test_metrics": {
+    "precision_1": 0.3447204968944099,
+    "recall_1": 0.9085948158253752,
+    "f1_1": 0.499812382739212,
+    "roc_auc": 0.6965891951214124,
+    "average_precision": 0.5322612983591699,
+    "brier": 0.21639658141008947,
+    "confusion_matrix": [
+      [
+        401,
+        1266
+      ],
+      [
+        67,
+        666
+      ]
+    ]
+  },
+  "artifact_sha256": "3e1fc0e0d27214953924915e0de63866cce7b46b3ae52193bbc25daeded7536e",
+  "dependencies": {
+    "python": "3.13.7",
+    "scikit_learn": "1.6.1"
+  },
+  "code_commit": "46b74e1c9855760bc30ffab3f41e4728af452f0c",
+  "selected_candidate": "logreg_c1"
+}

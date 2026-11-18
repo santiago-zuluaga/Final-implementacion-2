@@ -1,0 +1,142 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env and set passwords}
+      POSTGRES_DB: postgres
+      PRODUCTS_DB_PASSWORD: ${PRODUCTS_DB_PASSWORD:?Set DB passwords in .env}
+      CUSTOMERS_DB_PASSWORD: ${CUSTOMERS_DB_PASSWORD:?Set DB passwords in .env}
+      LOANS_DB_PASSWORD: ${LOANS_DB_PASSWORD:?Set DB passwords in .env}
+      INVENTORY_DB_PASSWORD: ${INVENTORY_DB_PASSWORD:?Set DB passwords in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sh:/docker-entrypoint-initdb.d/10-databases.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:?Set RABBIT_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:?Set RABBIT_PASSWORD in .env}
+    ports: ["15672:15672"]
+    volumes: ["rabbit-data:/var/lib/rabbitmq"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.21.3
+    command: ["mlflow", "server", "--host", "0.0.0.0", "--port", "5000", "--backend-store-uri", "sqlite:////mlflow/mlflow.db", "--default-artifact-root", "/mlartifacts", "--serve-artifacts"]
+    ports: ["5000:5000"]
+    volumes: ["./mlflow_data:/mlflow", "./mlflow_artifacts:/mlartifacts"]
+    restart: unless-stopped
+
+  products:
+    build: {context: ., dockerfile: docker/domain.Dockerfile}
+    environment:
+      SERVICE: products
+      DATABASE_URL: postgresql+psycopg://cm_products:${PRODUCTS_DB_PASSWORD}@postgres:5432/cm_products
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    ports: ["8001:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health',timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  customers:
+    build: {context: ., dockerfile: docker/domain.Dockerfile}
+    environment:
+      SERVICE: customers
+      DATABASE_URL: postgresql+psycopg://cm_customers:${CUSTOMERS_DB_PASSWORD}@postgres:5432/cm_customers
+    depends_on: {postgres: {condition: service_healthy}}
+    ports: ["8002:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health',timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  inventory:
+    build: {context: ., dockerfile: docker/domain.Dockerfile}
+    environment:
+      SERVICE: inventory
+      DATABASE_URL: postgresql+psycopg://cm_inventory:${INVENTORY_DB_PASSWORD}@postgres:5432/cm_inventory
+      RABBIT_URL: amqp://${RABBIT_USER}:${RABBIT_PASSWORD}@rabbitmq:5672/
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+    ports: ["8004:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health',timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  loans:
+    build: {context: ., dockerfile: docker/loan.Dockerfile}
+    environment:
+      SERVICE: loans
+      DATABASE_URL: postgresql+psycopg://cm_loans:${LOANS_DB_PASSWORD}@postgres:5432/cm_loans
+      RABBIT_URL: amqp://${RABBIT_USER}:${RABBIT_PASSWORD}@rabbitmq:5672/
+      PRODUCTS_URL: http://products:8000
+      CUSTOMERS_URL: http://customers:8000
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      products: {condition: service_started}
+      customers: {condition: service_started}
+      mlflow: {condition: service_started}
+    ports: ["8003:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready',timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_MLFLOW_URL: ${VITE_MLFLOW_URL:-http://localhost:5000}
+    depends_on:
+      products: {condition: service_started}
+      customers: {condition: service_started}
+      loans: {condition: service_started}
+      inventory: {condition: service_started}
+    ports: ["8080:80"]
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbit-data:

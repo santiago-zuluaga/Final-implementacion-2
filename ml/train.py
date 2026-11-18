@@ -50,6 +50,8 @@ def metrics(y,p,threshold):
 def main():
     if not DATA.exists(): raise SystemExit(f'Falta {DATA}. Copie allí el CSV de entrenamiento.')
     raw=DATA.read_bytes(); digest=hashlib.sha256(raw).hexdigest(); df=pd.read_csv(DATA)
+    try: commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True,stderr=subprocess.DEVNULL).strip()
+    except Exception: commit='unavailable'
     if TARGET not in df or df[TARGET].isna().any(): raise ValueError('Etiqueta ausente o incompleta')
     y=df[TARGET].astype(int); X=feature_frame(df)
     ids=np.arange(len(df)); dev,test=train_test_split(ids,test_size=.2,stratify=y,random_state=SEED)
@@ -78,10 +80,15 @@ def main():
       m=metrics(y.iloc[val],pv,.5); results.append({'name':name,'metrics_validation':m,'duration_seconds':time.time()-start}); fitted[name]=model
       if mlflow:
         with mlflow.start_run(run_name=name):
-          mlflow.log_params({'algorithm':type(est).__name__,'seed':SEED,'split':'60/20/20 stratified','selection':'AP validation, tie ROC-AUC then simplicity'})
-          mlflow.log_params(est.get_params(deep=False)); mlflow.log_param('data_sha256',digest); mlflow.log_param('features',json.dumps(FEATURES)); mlflow.log_param('python',platform.python_version())
+          mlflow.log_params({'algorithm':type(est).__name__,'seed':SEED,'split':'60/20/20 stratified','selection':'AP validation, tie ROC-AUC then simplicity','preprocessing_numeric':'median imputation + standard scaling','preprocessing_categorical':'most frequent imputation + one-hot, unknown ignored','data_sha256':digest,'features':json.dumps(FEATURES),'python':platform.python_version(),'code_commit':commit,'dependencies':json.dumps({'python':platform.python_version(),'pandas':pd.__version__,'scikit_learn':__import__('sklearn').__version__,'mlflow':mlflow.__version__})})
+          mlflow.log_params(est.get_params(deep=False))
           mlflow.log_metrics({k:v for k,v in m.items() if isinstance(v,(int,float))}); mlflow.log_metric('duration_seconds',results[-1]['duration_seconds'])
           mlflow.log_dict({'confusion_matrix':m['confusion_matrix']},'confusion.json')
+          from mlflow.models import infer_signature
+          example=X.iloc[train[:5]]
+          signature=infer_signature(example,model.predict_proba(example))
+          mlflow.sklearn.log_model(model,'pipeline',input_example=example,signature=signature)
+          results[-1]['mlflow_run_id']=mlflow.active_run().info.run_id
     # AP primary; ROC-AUC tie-breaker. Remaining ties retain the simpler earlier candidate.
     best=max(results,key=lambda r:(r['metrics_validation']['average_precision'],r['metrics_validation']['roc_auc']))
     model=fitted[best['name']]; pv=model.predict_proba(X.iloc[val])[:,1]
@@ -91,10 +98,28 @@ def main():
     threshold=float(thresholds[int(np.argmin(costs))])
     # Freeze threshold/model now; test is read exactly once below.
     pt=model.predict_proba(X.iloc[test])[:,1]; test_metrics=metrics(y.iloc[test],pt,threshold)
+    if mlflow and best.get('mlflow_run_id'):
+      with mlflow.start_run(run_id=best['mlflow_run_id']):
+        mlflow.log_metrics({f'test_{k}':v for k,v in test_metrics.items() if isinstance(v,(int,float))})
+        mlflow.log_dict({'confusion_matrix':test_metrics['confusion_matrix'],'threshold':threshold},'test_evaluation.json')
     version='v1'; dest=OUT/version; dest.mkdir(parents=True,exist_ok=True); artifact=dest/'pipeline.joblib'; joblib.dump(model,artifact)
-    manifest={'model_version':version,'run_id':best['name'],'dataset_sha256':digest,'features':FEATURES,'positive_class':1,'threshold':threshold,'selection_metric':'average_precision_validation','tie_breaker':'roc_auc_validation_then_simplicity','validation_metrics':best['metrics_validation'],'test_metrics':test_metrics,'artifact_sha256':hashlib.sha256(artifact.read_bytes()).hexdigest(),'dependencies':{'python':platform.python_version(),'scikit_learn':__import__('sklearn').__version__},'selected_candidate':best['name']}
+    example_row=df.iloc[int(val[0])]; example_input={k:(None if pd.isna(v) else v.item() if hasattr(v,'item') else v) for k,v in example_row.to_dict().items() if k not in ('solicitud_id','cliente_id',TARGET,'tasa_mensual_simulada')}
+    example_probability=float(model.predict_proba(X.iloc[[val[0]]])[:,1][0]); example={'input':example_input,'output':{'probabilidad_incumplimiento':example_probability,'decision_riesgo':'FAVORABLE' if example_probability<threshold else 'DESFAVORABLE','umbral':threshold,'model_version':version}}
+    (ROOT/'artifacts'/'model_example.json').write_text(json.dumps(example,indent=2),encoding='utf-8')
+    if mlflow and best.get('mlflow_run_id'):
+      with mlflow.start_run(run_id=best['mlflow_run_id']): mlflow.log_dict(example,'example_input_output.json')
+    manifest={'model_version':version,'run_id':best.get('mlflow_run_id') or best['name'],'mlflow_run_id':best.get('mlflow_run_id'),'dataset_sha256':digest,'features':FEATURES,'positive_class':1,'threshold':threshold,'selection_metric':'average_precision_validation','tie_breaker':'roc_auc_validation_then_simplicity','validation_metrics':best['metrics_validation'],'test_metrics':test_metrics,'artifact_sha256':hashlib.sha256(artifact.read_bytes()).hexdigest(),'dependencies':{'python':platform.python_version(),'scikit_learn':__import__('sklearn').__version__,'pandas':pd.__version__,'mlflow':mlflow.__version__ if mlflow else None},'code_commit':commit,'selected_candidate':best['name'],'example':example}
     (dest/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
-    (ROOT/'artifacts'/'training_report.json').write_text(json.dumps({'data_sha256':digest,'shape':df.shape,'class_rate':float(y.mean()),'missing':df.isna().sum().to_dict(),'partition_sizes':{'train':len(train),'validation':len(val),'test':len(test)},'selection_metric':'AP validation; ties ROC-AUC then simplicity','costs':{'false_approve':5,'false_reject':1},'threshold':threshold,'candidates':results,'selected':best['name'],'test_metrics':test_metrics,'mlflow_enabled':bool(mlflow)},indent=2),encoding='utf-8')
+    # Keep a second, distinct validation-selected candidate for explicit promotion/rollback demos.
+    runner=next(r for r in sorted(results,key=lambda r:(r['metrics_validation']['average_precision'],r['metrics_validation']['roc_auc']),reverse=True) if r['name']!=best['name'])
+    alt=fitted[runner['name']]; alt_p=alt.predict_proba(X.iloc[val])[:,1]
+    alt_costs=[5*np.sum((alt_p<t)&(y.iloc[val].to_numpy()==1))+np.sum((alt_p>=t)&(y.iloc[val].to_numpy()==0)) for t in thresholds]
+    alt_threshold=float(thresholds[int(np.argmin(alt_costs))]); v2=OUT/'v2'; v2.mkdir(parents=True,exist_ok=True); alt_artifact=v2/'pipeline.joblib'; joblib.dump(alt,alt_artifact)
+    alt_probability=float(alt.predict_proba(X.iloc[[val[0]]])[:,1][0]); alt_example={'input':example_input,'output':{'probabilidad_incumplimiento':alt_probability,'decision_riesgo':'FAVORABLE' if alt_probability<alt_threshold else 'DESFAVORABLE','umbral':alt_threshold,'model_version':'v2'}}
+    alt_manifest={'model_version':'v2','run_id':runner.get('mlflow_run_id') or runner['name'],'mlflow_run_id':runner.get('mlflow_run_id'),'dataset_sha256':digest,'features':FEATURES,'positive_class':1,'threshold':alt_threshold,'selection_metric':'validation only; candidate retained for promotion/rollback demonstration','validation_metrics':runner['metrics_validation'],'test_metrics':None,'artifact_sha256':hashlib.sha256(alt_artifact.read_bytes()).hexdigest(),'dependencies':manifest['dependencies'],'code_commit':commit,'selected_candidate':runner['name'],'example':alt_example}
+    (v2/'manifest.json').write_text(json.dumps(alt_manifest,indent=2),encoding='utf-8')
+    eda={'duplicate_rows':int(df.duplicated().sum()),'unique_customers':int(df['cliente_id'].nunique()),'constant_columns':[c for c in df.columns if df[c].nunique(dropna=False)<=1],'class_counts':y.value_counts().sort_index().to_dict(),'categorical_counts':{c:df[c].value_counts(dropna=False).to_dict() for c in ['tipo_empleo']},'numeric_summary':df.select_dtypes(include='number').describe().to_dict()}
+    (ROOT/'artifacts'/'training_report.json').write_text(json.dumps({'data_sha256':digest,'shape':df.shape,'class_rate':float(y.mean()),'missing':df.isna().sum().to_dict(),'eda':eda,'partition_sizes':{'train':len(train),'validation':len(val),'test':len(test)},'selection_metric':'AP validation; ties ROC-AUC then simplicity','costs':{'false_approve':5,'false_reject':1},'threshold':threshold,'candidates':results,'selected':best['name'],'test_metrics':test_metrics,'mlflow_enabled':bool(mlflow)},indent=2),encoding='utf-8')
     print(json.dumps(manifest,indent=2)); print(f'MLflow: {bool(mlflow)}; informe: artifacts/training_report.json')
 if __name__=='__main__': main()
 

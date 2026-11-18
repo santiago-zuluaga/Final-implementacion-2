@@ -3,14 +3,16 @@ from pathlib import Path
 import hashlib, json
 import joblib
 import pandas as pd
+import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from typing import Literal
 
 ROOT=Path(__file__).resolve().parents[1]
 class RiskInput(BaseModel):
     ingresos_mensuales_cop: int=Field(gt=0,le=1_000_000_000)
     obligaciones_mensuales_cop: int=Field(ge=0,le=1_000_000_000)
-    tipo_empleo: str
+    tipo_empleo: Literal['dependiente','independiente','temporal'] | None = None
     antiguedad_laboral_meses: float|None=Field(default=None,ge=0,le=1000)
     meses_historial_crediticio: float|None=Field(default=None,ge=0,le=1000)
     creditos_previos: int=Field(ge=0,le=1000)
@@ -22,6 +24,8 @@ class RiskInput(BaseModel):
 
 def features(d):
     d=d.copy(); d['sin_historial']=d['porcentaje_pago_puntual'].isna().astype(int)
+    d['tipo_empleo']=d['tipo_empleo'].astype(object)
+    d.loc[d['tipo_empleo'].isna(),'tipo_empleo']=np.nan
     den=d['ingresos_mensuales_cop'].replace(0,float('nan'))
     d['ratio_endeudamiento']=(d['obligaciones_mensuales_cop']+d['cuota_estimada_cop'])/den
     d['cuota_ingreso']=d['cuota_estimada_cop']/den

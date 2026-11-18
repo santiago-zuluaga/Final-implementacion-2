@@ -1,0 +1,11 @@
+.git
+.venv
+**/__pycache__
+**/*.pyc
+frontend/node_modules
+frontend/dist
+mlruns
+mlflow_data
+mlflow_artifacts
+.env
+.pytest_cache

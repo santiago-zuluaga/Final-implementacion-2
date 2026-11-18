@@ -1,0 +1,51 @@
+{
+  "model_version": "v2",
+  "run_id": "79777eb8df88470899d857f16474c332",
+  "mlflow_run_id": "79777eb8df88470899d857f16474c332",
+  "dataset_sha256": "c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd",
+  "features": [
+    "ingresos_mensuales_cop",
+    "obligaciones_mensuales_cop",
+    "antiguedad_laboral_meses",
+    "meses_historial_crediticio",
+    "creditos_previos",
+    "atrasos_previos_30d",
+    "porcentaje_pago_puntual",
+    "monto_solicitado_cop",
+    "plazo_meses",
+    "cuota_estimada_cop",
+    "sin_historial",
+    "ratio_endeudamiento",
+    "cuota_ingreso",
+    "tipo_empleo"
+  ],
+  "positive_class": 1,
+  "threshold": 0.30499999999999994,
+  "selection_metric": "validation only; candidate retained for promotion/rollback demonstration",
+  "validation_metrics": {
+    "precision_1": 0.44813278008298757,
+    "recall_1": 0.5893587994542974,
+    "f1_1": 0.5091337654684738,
+    "roc_auc": 0.6962266482583429,
+    "average_precision": 0.5197211532977962,
+    "brier": 0.21744776700763094,
+    "confusion_matrix": [
+      [
+        1135,
+        532
+      ],
+      [
+        301,
+        432
+      ]
+    ]
+  },
+  "test_metrics": null,
+  "artifact_sha256": "9cd78f020e47ee53036f691e5410d56fbdf934b2daf3b629d8bb8d7c5b57f81d",
+  "dependencies": {
+    "python": "3.13.7",
+    "scikit_learn": "1.6.1"
+  },
+  "code_commit": "46b74e1c9855760bc30ffab3f41e4728af452f0c",
+  "selected_candidate": "logreg_c05"
+}
