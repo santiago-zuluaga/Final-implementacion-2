@@ -1,0 +1,44 @@
+artifact_path: pipeline
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.13.7
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.6.1
+is_signature_from_type_hint: false
+mlflow_version: 2.21.3
+model_size_bytes: 292007
+model_uuid: 9977b181d38740de99a2568ae8d0a484
+prompts: null
+run_id: 72171b67e4a146cb9224350e5434d842
+saved_input_example_info:
+  artifact_path: input_example.json
+  pandas_orient: split
+  serving_input_path: serving_input_example.json
+  type: dataframe
+signature:
+  inputs: '[{"type": "double", "name": "ingresos_mensuales_cop", "required": true},
+    {"type": "double", "name": "obligaciones_mensuales_cop", "required": true}, {"type":
+    "double", "name": "antiguedad_laboral_meses", "required": false}, {"type": "double",
+    "name": "meses_historial_crediticio", "required": true}, {"type": "double", "name":
+    "creditos_previos", "required": true}, {"type": "double", "name": "atrasos_previos_30d",
+    "required": true}, {"type": "double", "name": "porcentaje_pago_puntual", "required":
+    false}, {"type": "double", "name": "monto_solicitado_cop", "required": true},
+    {"type": "double", "name": "plazo_meses", "required": true}, {"type": "double",
+    "name": "cuota_estimada_cop", "required": true}, {"type": "double", "name": "sin_historial",
+    "required": true}, {"type": "double", "name": "ratio_endeudamiento", "required":
+    true}, {"type": "double", "name": "cuota_ingreso", "required": true}, {"type":
+    "string", "name": "tipo_empleo", "required": true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float64", "shape": [-1,
+    2]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-11-18 13:27:49.165729'

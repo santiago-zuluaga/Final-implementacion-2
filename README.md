@@ -64,6 +64,8 @@ cd frontend; npm ci; npm run build; npm audit --omit=dev
 
 La importación de clientes requiere un CSV con columnas del histórico. La API hace upsert por `cliente_id`; repetir el mismo archivo no crea duplicados.
 
+Con el stack arriba y al menos un préstamo `COMPLETADA` disponible como fixture, ejecuta las pruebas de integración temporales desde `.venv`: `scripts/acceptance_stock_race.py`, `acceptance_idempotency.py`, `acceptance_price.py`, `acceptance_recovery.py`, `acceptance_cancel_late.py` y `acceptance_retry_dlq.py`. Cada script documenta y limpia sus datos de prueba. Para los artefactos MLOps: `python ml/audit_mlflow.py` audita el run seleccionado; `python scripts/acceptance_model_promotion.py` prueba promoción/rollback reiniciando Préstamos y termina con v1 activo. La suite unitaria es `.venv\Scripts\python.exe -m pytest -q` en Windows.
+
 ## Demo
 
 Sigue [docs/GUIA_DEMO.md](docs/GUIA_DEMO.md) para preparar datos y recorrer la interfaz con cuentas administrativas y de cliente. El [informe de Redis](docs/INFORME_REDIS.md) conserva la corrida medida y sus límites; la guía distingue una demo operativa de las pruebas formales de aceptación que siguen pendientes.

@@ -1,7 +1,7 @@
 {
   "model_version": "v1",
-  "run_id": "9832480fc36444aca9136ac601c40311",
-  "mlflow_run_id": "9832480fc36444aca9136ac601c40311",
+  "run_id": "3f1f7700afce493ead45d5aa6059d46f",
+  "mlflow_run_id": "3f1f7700afce493ead45d5aa6059d46f",
   "dataset_sha256": "c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd",
   "features": [
     "ingresos_mensuales_cop",
@@ -67,7 +67,7 @@
     "pandas": "2.2.3",
     "mlflow": "2.21.3"
   },
-  "code_commit": "cefabcbac1ac84832e1e7504ceb0d89f5dad67e8",
+  "code_commit": "aaec0372fb0abe940444fe575458779d42c42d8e",
   "selected_candidate": "logreg_c1",
   "example": {
     "input": {

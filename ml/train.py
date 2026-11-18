@@ -77,15 +77,15 @@ def main():
     results=[]; fitted={}
     for name,est in candidates:
       start=time.time(); model=pipeline(est); model.fit(X.iloc[train],y.iloc[train]); pv=model.predict_proba(X.iloc[val])[:,1]
-      m=metrics(y.iloc[val],pv,.5); results.append({'name':name,'metrics_validation':m,'duration_seconds':time.time()-start}); fitted[name]=model
+      m=metrics(y.iloc[val],pv,.5); ptr=model.predict_proba(X.iloc[train])[:,1]; m_train=metrics(y.iloc[train],ptr,.5); results.append({'name':name,'metrics_validation':m,'metrics_train':m_train,'duration_seconds':time.time()-start}); fitted[name]=model
       if mlflow:
         with mlflow.start_run(run_name=name):
           mlflow.log_params({'algorithm':type(est).__name__,'seed':SEED,'split':'60/20/20 stratified','selection':'AP validation, tie ROC-AUC then simplicity','preprocessing_numeric':'median imputation + standard scaling','preprocessing_categorical':'most frequent imputation + one-hot, unknown ignored','data_sha256':digest,'features':json.dumps(FEATURES),'python':platform.python_version(),'code_commit':commit,'dependencies':json.dumps({'python':platform.python_version(),'numpy':np.__version__,'pandas':pd.__version__,'scikit_learn':__import__('sklearn').__version__,'mlflow':mlflow.__version__})})
           mlflow.log_params(est.get_params(deep=False))
-          mlflow.log_metrics({k:v for k,v in m.items() if isinstance(v,(int,float))}); mlflow.log_metric('duration_seconds',results[-1]['duration_seconds'])
+          mlflow.log_metrics({k:v for k,v in m.items() if isinstance(v,(int,float))}); mlflow.log_metrics({f'train_{k}':v for k,v in m_train.items() if isinstance(v,(int,float))}); mlflow.log_metric('duration_seconds',results[-1]['duration_seconds'])
           mlflow.log_dict({'confusion_matrix':m['confusion_matrix']},'confusion.json')
           from mlflow.models import infer_signature
-          example=X.iloc[train[:5]]
+          example=X.iloc[train[:5]].copy(); example[NUM]=example[NUM].astype('float64')
           signature=infer_signature(example,model.predict_proba(example))
           mlflow.sklearn.log_model(model,'pipeline',input_example=example,signature=signature)
           results[-1]['mlflow_run_id']=mlflow.active_run().info.run_id

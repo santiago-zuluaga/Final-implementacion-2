@@ -13,6 +13,8 @@ Fuente de los casos: sección 12 del enunciado del profesor. El estado refleja e
 | `npm --prefix frontend run build` | Correcto | TypeScript y Vite produjeron bundle. |
 | `python ml/equivalence.py` | Correcto | 200 solicitudes, mismatch 0, error absoluto máximo `2.220446049250313e-16`, tolerancia `1e-9`, modelo `v1`. |
 | `python ml/audit_data.py` | Correcto | Auditoría reproducible de histórico (12.000 × 15) y solicitudes (200 × 14), sin filas duplicadas; SHA-256 en `artifacts/data_audit.json`. |
+| `python ml/audit_mlflow.py` | Correcto | Run seleccionado v1 contiene parámetros requeridos, métricas train/validación/test y artefactos esperados; evidencia en `artifacts/mlflow_audit.json`. |
+| `python scripts/acceptance_model_promotion.py` | Correcto | API reportó v2 luego de reinicio, después v1 luego de rollback/reinicio; evidencia en `artifacts/model_promotion_report.json`. |
 | `python scripts/seed_demo.py` | Correcto | Productos 1–3 disponibles; script no resetea stock existente. |
 | `python scripts/acceptance_stock_race.py` | Correcto | Favorable sin stock → `CANCELADA_SIN_STOCK`; carrera por una unidad produjo exactamente una `APROBADA` y una `CANCELADA_SIN_STOCK`, available=0/reserved=1; datos temporales eliminados. Requiere que exista un préstamo `COMPLETADA` sintético para reutilizar su perfil de riesgo. |
 | `python scripts/acceptance_idempotency.py` | Correcto | Mismo HTTP key/body devolvió igual ID; body cambiado dio 409; republicar comando y evento mantuvo una reserva, un movimiento y un evento. Limpieza temporal incluida; requiere préstamo `COMPLETADA` sintético. |

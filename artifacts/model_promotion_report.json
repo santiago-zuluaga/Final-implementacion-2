@@ -1,0 +1,46 @@
+{
+  "v2_after_restart": {
+    "model_version": "v2",
+    "run_id": "6d4ba9a990454f3abfd3dee2a877d0c8",
+    "features": [
+      "ingresos_mensuales_cop",
+      "obligaciones_mensuales_cop",
+      "antiguedad_laboral_meses",
+      "meses_historial_crediticio",
+      "creditos_previos",
+      "atrasos_previos_30d",
+      "porcentaje_pago_puntual",
+      "monto_solicitado_cop",
+      "plazo_meses",
+      "cuota_estimada_cop",
+      "sin_historial",
+      "ratio_endeudamiento",
+      "cuota_ingreso",
+      "tipo_empleo"
+    ],
+    "threshold": 0.30499999999999994
+  },
+  "v1_after_rollback_restart": {
+    "model_version": "v1",
+    "run_id": "3f1f7700afce493ead45d5aa6059d46f",
+    "features": [
+      "ingresos_mensuales_cop",
+      "obligaciones_mensuales_cop",
+      "antiguedad_laboral_meses",
+      "meses_historial_crediticio",
+      "creditos_previos",
+      "atrasos_previos_30d",
+      "porcentaje_pago_puntual",
+      "monto_solicitado_cop",
+      "plazo_meses",
+      "cuota_estimada_cop",
+      "sin_historial",
+      "ratio_endeudamiento",
+      "cuota_ingreso",
+      "tipo_empleo"
+    ],
+    "threshold": 0.30499999999999994
+  },
+  "final_active": "v1",
+  "passed": true
+}

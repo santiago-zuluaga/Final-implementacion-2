@@ -1,0 +1,46 @@
+{
+  "run_id": "3f1f7700afce493ead45d5aa6059d46f",
+  "status": "FINISHED",
+  "algorithm": "LogisticRegression",
+  "required_params": [
+    "algorithm",
+    "code_commit",
+    "data_sha256",
+    "dependencies",
+    "features",
+    "preprocessing_categorical",
+    "preprocessing_numeric",
+    "python",
+    "seed",
+    "selection",
+    "split"
+  ],
+  "missing_params": [],
+  "required_metrics": [
+    "average_precision",
+    "brier",
+    "duration_seconds",
+    "roc_auc",
+    "test_average_precision",
+    "test_brier",
+    "test_roc_auc",
+    "train_average_precision",
+    "train_brier",
+    "train_roc_auc"
+  ],
+  "missing_metrics": [],
+  "artifacts": [
+    "confusion.json",
+    "example_input_output.json",
+    "pipeline/MLmodel",
+    "pipeline/conda.yaml",
+    "pipeline/input_example.json",
+    "pipeline/model.pkl",
+    "pipeline/python_env.yaml",
+    "pipeline/requirements.txt",
+    "pipeline/serving_input_example.json",
+    "test_evaluation.json"
+  ],
+  "missing_artifacts": [],
+  "passed": true
+}
