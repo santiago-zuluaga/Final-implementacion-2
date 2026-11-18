@@ -38,6 +38,8 @@ Con RabbitMQ Management accesible y la DLQ `inventory.commands.dlq` vacía, `.ve
 
 `.venv\Scripts\python.exe scripts\acceptance_loan_validation.py` comprueba límites de esquema/monto y rechazos por perfil inactivo, ingreso cero y plazo fuera de negocio; valida ausencia de reservas y limpia fixtures.
 
+`.venv\Scripts\python.exe scripts\acceptance_pending_timeout.py` detiene RabbitMQ, espera el timeout real de dos minutos, recupera el broker y verifica cancelación/liberación; tarda aproximadamente 2,5 minutos y limpia sus datos temporales.
+
 ## Evidencia actual
 
 El registro fechado, con cantidades y límites, está en [EXECUTION_LOG.md](EXECUTION_LOG.md); los 16 casos académicos y su estado están en [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md). En el corte local del 18-11-2026, pytest dio 13 passed, build web pasó, equivalencia fue 200/200 con error máximo `2.22e-16`, y las pruebas de stock, idempotencia, recuperación, expiración, retry/DLQ y CSV quedaron registradas. Permanecen sin verificación visual los casos de frontend 14–16.

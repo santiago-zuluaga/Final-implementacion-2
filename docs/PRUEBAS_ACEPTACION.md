@@ -8,15 +8,17 @@ Fuente de los casos: sección 12 del enunciado del profesor. El estado refleja e
 |---|---|---|
 | Seguridad de sesión/token | Correcto | JWT vencido rechazado por ruta protegida (401); token interno incorrecto rechazado (401); tests existentes verifican rol y ownership. Auditoría confirmó `.env` fuera del historial Git y valores locales ausentes de archivos tracked. |
 | Aislamiento PostgreSQL | Correcto | `has_database_privilege` comprobó CONNECT propio en cada una de las cuatro bases y denegó los 12 pares rol/base cruzados. Se revocó CONNECT de PUBLIC y se agregó al init para clústeres nuevos. |
-| Persistencia PostgreSQL | Parcialmente correcto | `docker compose restart postgres` preservó el producto demo; GET del catálogo y login ADMIN respondieron 200 tras reinicio. Falta reiniciar/auditar persistencia RabbitMQ y MLflow independientemente. |
+| Persistencia PostgreSQL/RabbitMQ/MLflow | Correcto | PostgreSQL conservó catálogo/login tras restart; publicación persistente en cola durable sobrevivió restart de RabbitMQ; MLflow conservó 17/17 IDs y 137 artefactos existentes al reiniciar. |
 | `python -m pytest -q` | 13 passed, 1 aviso deprecado | Unitarias/ASGI: hashes y JWT, autorización básica, aislamiento de solicitudes por propietario, pipeline de riesgo. |
 | `npm --prefix frontend run build` | Correcto | TypeScript y Vite produjeron bundle. |
+| Manejo de error del polling frontend | Implementación compilada; visual pendiente | El fallo de GET del estado se muestra en el aviso global y se limpia al recibir una respuesta; no sustituye la verificación de navegador de ACC-15/16. |
 | `python ml/equivalence.py` | Correcto | 200 solicitudes, mismatch 0, error absoluto máximo `2.220446049250313e-16`, tolerancia `1e-9`, modelo `v1`. |
 | `python ml/audit_data.py` | Correcto | Auditoría reproducible de histórico (12.000 × 15) y solicitudes (200 × 14), sin filas duplicadas; SHA-256 en `artifacts/data_audit.json`. |
 | `python ml/audit_mlflow.py` | Correcto | Run seleccionado v1 contiene parámetros requeridos, métricas train/validación/test y artefactos esperados; evidencia en `artifacts/mlflow_audit.json`. |
 | `python scripts/acceptance_model_promotion.py` | Correcto | API y alias MLflow `champion` reportaron v2/Registry v1 tras promoción y v1/Registry v2 tras rollback con reinicios; evidencia en `artifacts/model_promotion_report.json`. |
 | `python scripts/acceptance_rabbit_persistence.py` | Correcto | Mensaje persistente en cola durable fue leído antes y después de reiniciar RabbitMQ; cola temporal eliminada. |
 | `python scripts/acceptance_loan_validation.py` | Correcto | Límites de esquema/monto (422), cliente inactivo, ingreso cero y plazo no permitido rechazados; no hubo reserva y los fixtures temporales se limpiaron. |
+| `python scripts/acceptance_pending_timeout.py` | Correcto | Con broker detenido se esperó 138,8 s; solicitud pasó a cancelación por timeout, se recuperó el broker, reserva liberada y stock restaurado. |
 | `python scripts/seed_demo.py` | Correcto | Productos 1–3 disponibles; script no resetea stock existente. |
 | `python scripts/acceptance_stock_race.py` | Correcto | Favorable sin stock → `CANCELADA_SIN_STOCK`; carrera por una unidad produjo exactamente una `APROBADA` y una `CANCELADA_SIN_STOCK`, available=0/reserved=1; datos temporales eliminados. Requiere que exista un préstamo `COMPLETADA` sintético para reutilizar su perfil de riesgo. |
 | `python scripts/acceptance_idempotency.py` | Correcto | Mismo HTTP key/body devolvió igual ID; body cambiado dio 409; republicar comando y evento mantuvo una reserva, un movimiento y un evento. Limpieza temporal incluida; requiere préstamo `COMPLETADA` sintético. |
@@ -29,7 +31,7 @@ Fuente de los casos: sección 12 del enunciado del profesor. El estado refleja e
 | Promoción y rollback V2/V1 | Correcto | `ml/promote.py v2`, reinicio de Préstamos, `/modelo/info` devolvió v2; rollback a v1, reinicio, `/modelo/info` devolvió v1. Puntero quedó en v1. |
 | `git diff --check` | Correcto | Sin errores de whitespace. |
 
-El acceso de navegador a `http://localhost:8080` fue denegado por la aprobación del origen de la herramienta; no se intentó ningún camino alternativo de navegador. La interfaz compila y el proxy API funciona, pero los criterios visuales y el flujo UI real quedan sin comprobar.
+El acceso del navegador integrado a `http://localhost:8080` fue rechazado por una configuración guardada de permisos; no se intentó otro navegador ni una vía indirecta. La interfaz compila y el proxy API funciona, pero los criterios visuales y el flujo UI real quedan sin comprobar.
 
 ## Casos del enunciado
 
@@ -41,7 +43,7 @@ El acceso de navegador a `http://localhost:8080` fue denegado por la aprobación
 | 4 | Dos solicitudes por última unidad | Aprobado. | Dos POST concurrentes contra PostgreSQL con una unidad: una `APROBADA`, otra `CANCELADA_SIN_STOCK`; available=0, reserved=1. |
 | 5 | Petición/evento repetido | Aprobado. | `acceptance_idempotency.py` repitió petición HTTP y volvió a publicar el comando y el evento con el mismo event_id. Mismo préstamo, 409 ante cuerpo distinto y efectos de inventario permanecieron en una reserva/movimiento/evento. |
 | 6 | Caída de consumidor/broker y recuperación | Aprobado. | `acceptance_recovery.py` detuvo RabbitMQ al escribir el préstamo y luego detuvo Inventario tras publicar el comando; tras restaurar ambos casos avanzaron de pendiente a aprobado con un efecto por préstamo. |
-| 7 | Cancelación y evento tardío/expirado | Aprobado. | `acceptance_cancel_late.py`: liberación por cancelación, evento tardío sin reactivación y expiración con estado CANCELADA/EXPIRED y stock devuelto. |
+| 7 | Cancelación y evento tardío/expirado | Aprobado. | `acceptance_cancel_late.py`: liberación por cancelación, evento tardío sin reactivación y expiración con estado CANCELADA/EXPIRED y stock devuelto. `acceptance_pending_timeout.py`: worker venció solicitud tras 138,8 s y al reanudar el broker finalizó `CANCELADA` con reserva liberada y stock restaurado. |
 | 8 | Redis vacío, expirado y caído | Aprobado. | Clave vaciada y miss/hit; TTL expirado; Redis detenido con tres respuestas 200 vía DB y fallbacks=3; Redis restaurado y caché retomó miss/hit. El TTL configurado es 300s; la prueba de expiración acortó el TTL de la clave a 1s. |
 | 9 | Cambio de precio invalida cache y préstamo usa nuevo precio | Aprobado. | `acceptance_price.py`: clave caliente, PUT a versión 2, GET y cotización interna nuevos; préstamo aprobado guardó el precio y la versión 2. Limpieza automática. |
 | 10 | Modelo exportado equivalente a API | Aprobado. | Corrida de equivalencia: 200/200, mismatch 0, max error `2.22e-16`, modelo v1. |

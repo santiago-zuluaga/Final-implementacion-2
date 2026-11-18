@@ -1,0 +1,10 @@
+{
+  "initial_status": "PENDIENTE_INVENTARIO",
+  "timeout_status": "CANCELACION_PENDIENTE",
+  "final_status": "CANCELADA",
+  "reservation_status": "RELEASED",
+  "available_after_release": 1,
+  "reserved_after_release": 0,
+  "elapsed_seconds": 138.8,
+  "passed": true
+}

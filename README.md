@@ -64,7 +64,7 @@ cd frontend; npm ci; npm run build; npm audit --omit=dev
 
 La importación de clientes requiere un CSV con columnas del histórico. La API hace upsert por `cliente_id`; repetir el mismo archivo no crea duplicados.
 
-Con el stack arriba y al menos un préstamo `COMPLETADA` disponible como fixture, ejecuta las pruebas de integración temporales desde `.venv`: `scripts/acceptance_stock_race.py`, `acceptance_idempotency.py`, `acceptance_price.py`, `acceptance_recovery.py`, `acceptance_cancel_late.py`, `acceptance_retry_dlq.py` y `acceptance_loan_validation.py`. Cada script documenta y limpia sus datos de prueba. `scripts/acceptance_rabbit_persistence.py` también reinicia RabbitMQ para probar una cola temporal durable y luego la elimina. Para MLOps, `python ml/audit_mlflow.py` audita el run seleccionado; `ml/promote.py` registra en MLflow Model Registry, mueve el alias `champion` y actualiza el puntero local; `python scripts/acceptance_model_promotion.py` prueba v2/rollback reiniciando Préstamos y termina con v1 activo. La suite unitaria es `.venv\Scripts\python.exe -m pytest -q` en Windows.
+Con el stack arriba y al menos un préstamo `COMPLETADA` disponible como fixture, ejecuta las pruebas de integración temporales desde `.venv`: `scripts/acceptance_stock_race.py`, `acceptance_idempotency.py`, `acceptance_price.py`, `acceptance_recovery.py`, `acceptance_cancel_late.py`, `acceptance_retry_dlq.py`, `acceptance_loan_validation.py` y `acceptance_pending_timeout.py`. Cada script documenta y limpia sus datos de prueba; el último detiene RabbitMQ y tarda aproximadamente 2,5 minutos. `scripts/acceptance_rabbit_persistence.py` también reinicia RabbitMQ para probar una cola temporal durable y luego la elimina. Para MLOps, `python ml/audit_mlflow.py` audita el run seleccionado; `ml/promote.py` registra en MLflow Model Registry, mueve el alias `champion` y actualiza el puntero local; `python scripts/acceptance_model_promotion.py` prueba v2/rollback reiniciando Préstamos y termina con v1 activo. La suite unitaria es `.venv\Scripts\python.exe -m pytest -q` en Windows.
 
 ## Demo
 
@@ -74,6 +74,10 @@ Para seguimiento de pendientes y limitaciones reales, usa [docs/estado.md](docs/
 
 ## Integrantes
 
-| Integrante | Responsabilidades |
+**Modalidad: trabajo individual.** Único autor e integrante: **Santiago Zuluaga Correa**.
+
+La sección 2 del enunciado general describe equipos de hasta cuatro estudiantes. La modalidad individual de esta entrega corresponde a la aclaración específica del autor.
+
+| Integrante | Responsabilidades principales |
 |---|---|
-| Por definir | Por definir |
+| Santiago Zuluaga Correa | Arquitectura, backend, frontend, Machine Learning, MLOps, infraestructura, integración, pruebas y documentación. |
