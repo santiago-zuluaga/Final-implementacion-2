@@ -18,7 +18,10 @@
       "cuota_ingreso",
       "tipo_empleo"
     ],
-    "threshold": 0.30499999999999994
+    "threshold": 0.30499999999999994,
+    "registry_name": "CrediMarketRisk",
+    "registry_version": 1,
+    "registry_alias": "champion"
   },
   "v1_after_rollback_restart": {
     "model_version": "v1",
@@ -39,7 +42,10 @@
       "cuota_ingreso",
       "tipo_empleo"
     ],
-    "threshold": 0.30499999999999994
+    "threshold": 0.30499999999999994,
+    "registry_name": "CrediMarketRisk",
+    "registry_version": 2,
+    "registry_alias": "champion"
   },
   "final_active": "v1",
   "passed": true

@@ -14,7 +14,7 @@ Fuente de los casos: sección 12 del enunciado del profesor. El estado refleja e
 | `python ml/equivalence.py` | Correcto | 200 solicitudes, mismatch 0, error absoluto máximo `2.220446049250313e-16`, tolerancia `1e-9`, modelo `v1`. |
 | `python ml/audit_data.py` | Correcto | Auditoría reproducible de histórico (12.000 × 15) y solicitudes (200 × 14), sin filas duplicadas; SHA-256 en `artifacts/data_audit.json`. |
 | `python ml/audit_mlflow.py` | Correcto | Run seleccionado v1 contiene parámetros requeridos, métricas train/validación/test y artefactos esperados; evidencia en `artifacts/mlflow_audit.json`. |
-| `python scripts/acceptance_model_promotion.py` | Correcto | API reportó v2 luego de reinicio, después v1 luego de rollback/reinicio; evidencia en `artifacts/model_promotion_report.json`. |
+| `python scripts/acceptance_model_promotion.py` | Correcto | API y alias MLflow `champion` reportaron v2/Registry v1 tras promoción y v1/Registry v2 tras rollback con reinicios; evidencia en `artifacts/model_promotion_report.json`. |
 | `python scripts/acceptance_rabbit_persistence.py` | Correcto | Mensaje persistente en cola durable fue leído antes y después de reiniciar RabbitMQ; cola temporal eliminada. |
 | `python scripts/seed_demo.py` | Correcto | Productos 1–3 disponibles; script no resetea stock existente. |
 | `python scripts/acceptance_stock_race.py` | Correcto | Favorable sin stock → `CANCELADA_SIN_STOCK`; carrera por una unidad produjo exactamente una `APROBADA` y una `CANCELADA_SIN_STOCK`, available=0/reserved=1; datos temporales eliminados. Requiere que exista un préstamo `COMPLETADA` sintético para reutilizar su perfil de riesgo. |
@@ -44,7 +44,7 @@ El acceso de navegador a `http://localhost:8080` fue denegado por la aprobación
 | 8 | Redis vacío, expirado y caído | Aprobado. | Clave vaciada y miss/hit; TTL expirado; Redis detenido con tres respuestas 200 vía DB y fallbacks=3; Redis restaurado y caché retomó miss/hit. El TTL configurado es 300s; la prueba de expiración acortó el TTL de la clave a 1s. |
 | 9 | Cambio de precio invalida cache y préstamo usa nuevo precio | Aprobado. | `acceptance_price.py`: clave caliente, PUT a versión 2, GET y cotización interna nuevos; préstamo aprobado guardó el precio y la versión 2. Limpieza automática. |
 | 10 | Modelo exportado equivalente a API | Aprobado. | Corrida de equivalencia: 200/200, mismatch 0, max error `2.22e-16`, modelo v1. |
-| 11 | Promoción/rollback de modelo | Aprobado. | Se promovió v2, reinició Préstamos y `/modelo/info` informó v2; rollback a v1, reinicio y `/modelo/info` informó v1. Puntero final v1. |
+| 11 | Promoción/rollback de modelo | Aprobado. | Se promovió v2, reinició Préstamos y `/modelo/info` informó v2; alias MLflow `champion` apuntó al run de v2. Rollback a v1, reinicio y API/alias informaron v1. Puntero final v1. |
 | 12 | Importar CSV dos veces sin duplicar | Aprobado. | CSV sintético de una fila: primera importación inserted=1/updated=0/rejected=0; segunda inserted=0/updated=1/rejected=0; se confirmó un solo perfil y se eliminó tras la prueba. |
 | 13 | Cliente no ve préstamos ajenos | Aprobado por prueba manual de API previa: dueño 200, ajeno 403; unitarias verifican solicitud ajena 403. | Conservar el resultado reproducible de integración al ejecutar la suite completa. |
 | 14 | Operación del negocio desde frontend | No verificado por navegador. | La aprobación del origen local fue denegada; requiere validación manual de la interfaz en demo. |

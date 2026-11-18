@@ -8,11 +8,15 @@ from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
+from mlflow.tracking import MlflowClient
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
 BASE = os.getenv("CUSTOMERS_URL", "http://localhost:8002")
 LOANS = os.getenv("LOANS_URL", "http://localhost:8003")
+TRACKING = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+REGISTRY = "CrediMarketRisk"
+registry = MlflowClient(tracking_uri=TRACKING)
 session = requests.Session()
 login = session.post(f"{BASE}/auth/login", json={"username": os.environ["ADMIN_USERNAME"], "password": os.environ["ADMIN_PASSWORD"]}, timeout=5)
 login.raise_for_status()
@@ -31,6 +35,13 @@ def restart_and_read(expected):
             info = observed.json()
             if ready.json().get("status") != "ready" or info["model_version"] != expected:
                 raise AssertionError(f"Expected {expected}, got ready={ready.json()} info={info}")
+            manifest = json.loads((ROOT / "models" / expected / "manifest.json").read_text(encoding="utf-8"))
+            alias = registry.get_model_version_by_alias(REGISTRY, "champion")
+            if alias.run_id != manifest["mlflow_run_id"] or int(alias.version) != manifest["mlflow_registry_version"]:
+                raise AssertionError(f"MLflow champion alias does not match {expected}: {alias}")
+            info["registry_name"] = REGISTRY
+            info["registry_version"] = int(alias.version)
+            info["registry_alias"] = "champion"
             return info
         except (requests.RequestException, AssertionError) as exc:
             last = exc

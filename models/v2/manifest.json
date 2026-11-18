@@ -71,5 +71,7 @@
       "umbral": 0.30499999999999994,
       "model_version": "v2"
     }
-  }
+  },
+  "mlflow_registry_name": "CrediMarketRisk",
+  "mlflow_registry_version": 1
 }

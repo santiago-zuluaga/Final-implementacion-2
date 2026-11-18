@@ -18,16 +18,17 @@ Revisión: 18 de noviembre de 2026. La matriz detallada es [MATRIZ_CUMPLIMIENTO.
 - Persistencia RabbitMQ verificada con mensaje persistente en cola durable tras restart; la prueba retiró su cola temporal.
 - Aceptación: stock insuficiente, carrera por última unidad, precio/versión actualizada, cancelación/evento tardío/vencimiento, importación CSV doble, promoción/rollback y modelo equivalente probados. Resultado actual: 13/16 casos aprobados.
 - ML con split 60/20/20 seed 42, baseline + siete candidatas; v1 `logreg_c1` seleccionado por validación, threshold ~0.305. Equivalencia en 200 filas: mismatches 0, error máximo `2.22e-16`.
+- MLflow Model Registry registra v1/v2 por `run_id`; el alias `champion` sigue las promociones/rollback junto al puntero local y la API.
 - Redis: misses/hits, expiración, fallback con Redis detenido y recuperación probados. Benchmark y snapshots de recursos están en [`INFORME_REDIS.md`](INFORME_REDIS.md) y `artifacts/redis_benchmark.json`.
 - `pytest -q`: 13 passed; build frontend Vite/TypeScript correcto; servicios Docker healthy.
-- PostgreSQL restart conservó el catálogo y permitió login ADMIN; la persistencia RabbitMQ tras restart aún no se probó.
+- PostgreSQL restart conservó el catálogo y permitió login ADMIN; RabbitMQ conservó una publicación persistente en cola durable tras restart.
 - MLflow reiniciado de forma aislada conservó 17/17 IDs de corrida y 137 archivos de artefactos que ya existían. La auditoría del run seleccionado confirma métricas train/validación/test; los intentos fallidos quedan visibles en tracking.
 - `scripts/acceptance_model_promotion.py` observó v2 y después v1 desde `/modelo/info` tras reiniciar Préstamos; modelo v1 queda activo. La equivalencia fue repetida tras el entrenamiento.
 
 ## Pendientes antes de completar
 
 - Casos 14–16: validar flujo real desde la interfaz, polling de estado, formularios/errores y sesión vencida en navegador. La aprobación para abrir `http://localhost:8080` fue denegada por el gate de origen en esta sesión; no se intentó un camino alternativo.
-- La matriz conserva 29 requisitos `IMPLEMENTADO_NO_VERIFICADO` y 1 `BLOQUEADO`; incluye auditoría exhaustiva de endpoints/OpenAPI, reinicio RabbitMQ con mensajes persistidos y timeout de solicitud aún pendiente.
+- La matriz conserva 27 requisitos `IMPLEMENTADO_NO_VERIFICADO` y 1 `BLOQUEADO`; incluye auditoría exhaustiva de endpoints/OpenAPI y timeout de solicitud aún pendiente.
 - TEAM-01 requiere nombres, responsabilidades y aportes reales del grupo, que no estaban en los archivos recibidos y no se inventaron.
 
 ## Límites
