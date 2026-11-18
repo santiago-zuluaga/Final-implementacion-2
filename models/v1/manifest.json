@@ -1,7 +1,7 @@
 {
   "model_version": "v1",
-  "run_id": "52f617e25f71447da4234cb8c04ba4b9",
-  "mlflow_run_id": "52f617e25f71447da4234cb8c04ba4b9",
+  "run_id": "9832480fc36444aca9136ac601c40311",
+  "mlflow_run_id": "9832480fc36444aca9136ac601c40311",
   "dataset_sha256": "c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd",
   "features": [
     "ingresos_mensuales_cop",
@@ -62,8 +62,32 @@
   "artifact_sha256": "3e1fc0e0d27214953924915e0de63866cce7b46b3ae52193bbc25daeded7536e",
   "dependencies": {
     "python": "3.13.7",
-    "scikit_learn": "1.6.1"
+    "numpy": "2.2.6",
+    "scikit_learn": "1.6.1",
+    "pandas": "2.2.3",
+    "mlflow": "2.21.3"
   },
-  "code_commit": "46b74e1c9855760bc30ffab3f41e4728af452f0c",
-  "selected_candidate": "logreg_c1"
+  "code_commit": "cefabcbac1ac84832e1e7504ceb0d89f5dad67e8",
+  "selected_candidate": "logreg_c1",
+  "example": {
+    "input": {
+      "ingresos_mensuales_cop": 7821000,
+      "obligaciones_mensuales_cop": 2015000,
+      "tipo_empleo": "independiente",
+      "antiguedad_laboral_meses": 24.0,
+      "meses_historial_crediticio": 62.0,
+      "creditos_previos": 4,
+      "atrasos_previos_30d": 6,
+      "porcentaje_pago_puntual": 30.58,
+      "monto_solicitado_cop": 4842000,
+      "plazo_meses": 24,
+      "cuota_estimada_cop": 250238.6
+    },
+    "output": {
+      "probabilidad_incumplimiento": 0.9021965791849502,
+      "decision_riesgo": "DESFAVORABLE",
+      "umbral": 0.30499999999999994,
+      "model_version": "v1"
+    }
+  }
 }

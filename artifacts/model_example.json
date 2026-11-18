@@ -1,0 +1,21 @@
+{
+  "input": {
+    "ingresos_mensuales_cop": 7821000,
+    "obligaciones_mensuales_cop": 2015000,
+    "tipo_empleo": "independiente",
+    "antiguedad_laboral_meses": 24.0,
+    "meses_historial_crediticio": 62.0,
+    "creditos_previos": 4,
+    "atrasos_previos_30d": 6,
+    "porcentaje_pago_puntual": 30.58,
+    "monto_solicitado_cop": 4842000,
+    "plazo_meses": 24,
+    "cuota_estimada_cop": 250238.6
+  },
+  "output": {
+    "probabilidad_incumplimiento": 0.9021965791849502,
+    "decision_riesgo": "DESFAVORABLE",
+    "umbral": 0.30499999999999994,
+    "model_version": "v1"
+  }
+}

@@ -13,23 +13,23 @@ Fecha de revisión: 18 de noviembre de 2026.
 
 - Entrenamiento estratificado 60/20/20, semilla 42, baseline y siete candidatas de cuatro algoritmos; pipeline de imputación/codificación/escalado dentro del estimador.
 - Selección predefinida por AP de validación, desempate ROC-AUC; umbral por costos didácticos 5/1 sobre validación; test solo para la selección final.
-- Ocho ejecuciones registradas en un tracking server MLflow local persistente. Modelo v1 con manifiesto/hash y v2 candidata de validación; promoción v2→v1 probada.
+- Dieciséis ejecuciones finalizadas en un tracking server MLflow local persistente; una corrida fallida quedó identificada como FAILED. Modelo v1 con manifiesto/hash y v2 candidata de validación; promoción v2→v1 probada.
 - API FastAPI de riesgo carga un modelo promovido; equivalencia local/API en las 200 solicitudes: error absoluto máximo `2.22e-16`, dentro de `1e-9`.
 - PSI de las 200 solicitudes comparado con entrenamiento; ninguna feature supera 0,2. Esto no mide capacidad predictiva porque no hay etiqueta.
 - APIs en un código compartido desplegadas por separado: CRUD de Productos con Redis cache-aside y cotización directa de BD; Clientes con upsert e importación CSV; Préstamos con precio/version capturados, modelo, idempotency key, outbox, estados y timeout; Inventario con reserva atómica, movimiento, liberación, entrega, outbox y expiración.
 - Frontend React/TypeScript operativo para catálogo y edición/desactivación, registro/importación de clientes, solicitud con clave retenida, seguimiento por polling, registro de existencias, entrega/cancelación y modelo.
 - Compose describe PostgreSQL (cuatro bases/roles), RabbitMQ, Redis, MLflow y cuatro APIs más Nginx/React.
 - `python -m compileall -q domain_service loan_service ml tests`: correcto.
-- `python -m pytest -q`: 6 passed (one aviso de deprecación en Starlette/AnyIO).
+- `python -m pytest -q`: 7 passed (un aviso de deprecación en Starlette/AnyIO).
 - `npm run build`: correcto.
 - `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilidades de producción.
 - `docker compose config --quiet`: correcto con `.env` local.
 
 ## Implementado pero no integrado/verificado en Docker
 
-El daemon de Docker Desktop no estaba activo (no existe el pipe del motor Linux). Por ello no se construyeron imágenes ni se levantaron contenedores. Las APIs de dominio solo tienen compilación estática y revisión de código, no prueba integrada con PostgreSQL, Redis o RabbitMQ. MLflow sí se verificó localmente con servidor y ocho corridas.
+El daemon de Docker Desktop no estaba activo (no existe el pipe del motor Linux). Por ello no se construyeron imágenes ni se levantaron contenedores. Las APIs de dominio solo tienen compilación estática, pruebas de esquema/inferencia y revisión de código, no prueba integrada con PostgreSQL, Redis o RabbitMQ. MLflow sí se verificó localmente con servidor y dieciséis corridas finalizadas.
 
-La API aislada `loan_service.app` se probó contra el artefacto, pero el contenedor Compose usa `domain_service.app`; la equivalencia exacta de 200 casos aún debe repetirse contra ese endpoint al arrancar el stack.
+La API aislada `loan_service.app` y la ruta de inferencia de `domain_service.app` se compararon con el artefacto en 200 filas (para el segundo caso se usó ASGI en proceso, sin ejecutar su startup de DB). Falta repetir la equivalencia contra el contenedor Compose con el stack levantado.
 
 ## Pendiente obligatorio o de alto impacto
 

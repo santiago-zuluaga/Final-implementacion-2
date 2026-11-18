@@ -56,3 +56,25 @@ def test_domain_openapi_exposes_required_routes():
     paths=app.openapi()['paths']
     for path in ['/products','/products/{id}/quotation','/customers/import','/inventory','/inventory/stock','/prestamos','/prestamos/{id}','/riesgo/predict','/modelo/info','/health','/ready']:
         assert path in paths
+
+def test_domain_loan_service_predictions_match_artifact_for_all_unlabeled_rows():
+    import asyncio, httpx, numpy as np
+    import domain_service.app as service
+    pointer=json.loads((ROOT/'models'/'active.json').read_text())
+    manifest=json.loads((ROOT/'models'/pointer['manifest']).read_text())
+    service.SERVICE='loans'
+    service.app.state.manifest=manifest
+    service.app.state.model=joblib.load(ROOT/'models'/pointer['artifact'])
+    df=pd.read_csv(ROOT/'data'/'solicitudes_nuevas.csv')
+    expected=service.app.state.model.predict_proba(feature_frame(df))[:,1]
+    async def collect():
+      result=[]
+      transport=httpx.ASGITransport(app=service.app)
+      async with httpx.AsyncClient(transport=transport,base_url='http://service.test') as client:
+        for _,row in df.iterrows():
+          body={k:(None if pd.isna(v) else v.item() if hasattr(v,'item') else v) for k,v in row.to_dict().items() if k not in ('solicitud_id','cliente_id','tasa_mensual_simulada')}
+          response=await client.post('/riesgo/predict',json=body); assert response.status_code==200
+          result.append(response.json()['probabilidad_incumplimiento'])
+      return result
+    observed=np.asarray(asyncio.run(collect()))
+    assert np.max(np.abs(expected-observed))<=1e-9

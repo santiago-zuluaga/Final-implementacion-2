@@ -143,7 +143,7 @@
       },
       "cuota_estimada_cop": {
         "count": 12000.0,
-        "mean": 310719.3067858333,
+        "mean": 310719.3067858334,
         "std": 307864.88408920926,
         "min": 18991.92,
         "25%": 122632.92499999999,
@@ -195,8 +195,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.02200007438659668,
-      "mlflow_run_id": "4f6cfb184942482f9cfd074947d72adc"
+      "duration_seconds": 0.022246360778808594,
+      "mlflow_run_id": "1d4a03811c46481a8c6d34f9fd6fdcdf"
     },
     {
       "name": "logreg_c1",
@@ -218,8 +218,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.02790546417236328,
-      "mlflow_run_id": "52f617e25f71447da4234cb8c04ba4b9"
+      "duration_seconds": 0.02710270881652832,
+      "mlflow_run_id": "9832480fc36444aca9136ac601c40311"
     },
     {
       "name": "logreg_c05",
@@ -241,8 +241,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.03342175483703613,
-      "mlflow_run_id": "79777eb8df88470899d857f16474c332"
+      "duration_seconds": 0.030069828033447266,
+      "mlflow_run_id": "f6fd0100f9724672ad349e42ccc1c989"
     },
     {
       "name": "tree_d5",
@@ -264,8 +264,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.04883241653442383,
-      "mlflow_run_id": "f46a2d2e7c0f460e974483fe95c0fd60"
+      "duration_seconds": 0.04788351058959961,
+      "mlflow_run_id": "176eceb4faa24d8594399915dd68d461"
     },
     {
       "name": "tree_d8",
@@ -287,8 +287,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.06897139549255371,
-      "mlflow_run_id": "8b0bfb7cea1c4046ac3ab0d956bb2ea7"
+      "duration_seconds": 0.05821800231933594,
+      "mlflow_run_id": "bac61bbc10814c528103f1076ea8f6c7"
     },
     {
       "name": "forest_300",
@@ -310,8 +310,8 @@
           ]
         ]
       },
-      "duration_seconds": 1.1392676830291748,
-      "mlflow_run_id": "a235a35e489646ff938e344853811953"
+      "duration_seconds": 1.320068120956421,
+      "mlflow_run_id": "776f9b0804fd4104b25e539ec9d33495"
     },
     {
       "name": "forest_500",
@@ -333,8 +333,8 @@
           ]
         ]
       },
-      "duration_seconds": 1.8259069919586182,
-      "mlflow_run_id": "8e16edf60f1e48c39f5f3ef3ae700575"
+      "duration_seconds": 2.0213475227355957,
+      "mlflow_run_id": "f37a2e8239194896bc805682f8627db2"
     },
     {
       "name": "hist_150",
@@ -356,8 +356,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.2624666690826416,
-      "mlflow_run_id": "3785ac0011164c8f9da2c834b529261a"
+      "duration_seconds": 0.1822347640991211,
+      "mlflow_run_id": "63daa7c1a2eb4214841df8a4954c7bfa"
     }
   ],
   "selected": "logreg_c1",

@@ -1,7 +1,7 @@
 # Verificación
 
 - Frontend: `cd frontend && npm ci && npm run build`.
-- Backend: `python -m compileall -q domain_service loan_service ml scripts tests` y `python -m pytest -q` (actualmente 6 tests).
+- Backend: `python -m compileall -q domain_service loan_service ml scripts tests` y `python -m pytest -q` (actualmente 7 tests).
 - Entrenamiento: `python ml/train.py` (para MLflow, configurar `MLFLOW_TRACKING_URI=http://localhost:5000` y levantar Compose).
 - Contrato de ejecución: `docker compose config --quiet` después de copiar `.env.example` a `.env` y completar credenciales.
 - Equivalencia: `python ml/equivalence.py --url http://localhost:8003`.

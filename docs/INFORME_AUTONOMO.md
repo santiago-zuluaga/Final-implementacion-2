@@ -24,12 +24,12 @@ Productos, Clientes, Préstamos e Inventario son procesos FastAPI separados, con
 ## Pruebas y verificaciones
 
 - `python -m compileall -q domain_service loan_service ml scripts tests`: correcto.
-- `python -m pytest -q`: 6 pasaron. Un aviso de deprecación procede de Starlette/AnyIO.
+- `python -m pytest -q`: 7 pasaron. Un aviso de deprecación procede de Starlette/AnyIO.
 - `npm ci && npm run build`: correcto.
 - `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilidades de producción. El audit completo reporta alertas de desarrollo en la dependencia transitoria picomatch de Vite.
 - `docker compose config --quiet`: correcto con `.env` local.
-- Entrenamiento con MLflow Tracking server local: 8 corridas finalizadas; la primera tentativa se interrumpió por codificación de consola y quedó como run fallido.
-- Equivalencia API/pipeline verificada en 200 filas; drift script ejecutado.
+- Entrenamiento con MLflow Tracking server local: 16 corridas finalizadas y una corrida fallida identificada como `FAILED`.
+- Equivalencia API/pipeline verificada en 200 filas para la API aislada y la ruta de inferencia del servicio de Préstamos (ASGI en proceso, sin DB); drift script ejecutado.
 
 ## Ejecución
 
@@ -45,7 +45,7 @@ URLs: frontend `http://localhost:8080`; APIs Swagger en `8001`–`8004`; MLflow 
 
 - Docker Engine no estaba activo/disponible, por lo que no se construyeron imágenes ni se levantó PostgreSQL, RabbitMQ, Redis, MLflow en Compose o frontend en contenedor.
 - La topología RabbitMQ incluye reintentos con TTL y DLQ, pero no ha sido probada con el broker real.
-- El stack compuesto de servicios no se probó con DB/broker/cache. La equivalencia se ejecutó con la API aislada `loan_service.app`; falta repetirla en `domain_service.app`.
+- El stack compuesto de servicios no se probó con DB/broker/cache. La equivalencia de `domain_service.app` se hizo localmente sin ejecutar el startup de DB; falta repetirla dentro del contenedor Compose.
 - Autenticación/autorización JWT, ownership de préstamos, sesiones y rutas administrativas protegidas pendientes.
 - No hay historial de transiciones separado, migraciones versionadas ni pruebas de aceptación 1–16. Falta auditoría de idempotencia bajo concurrencia real.
 - La UI mantiene las solicitudes de la sesión actual, no hay listado histórico autenticado.

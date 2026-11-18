@@ -2,8 +2,6 @@
 __pycache__/
 *.py[cod]
 mlruns/
-mlflow_data/
-mlflow_artifacts/
 .pytest_cache/
 node_modules/
 dist/
