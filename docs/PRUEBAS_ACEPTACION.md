@@ -34,7 +34,7 @@ El acceso de navegador a `http://localhost:8080` fue denegado por la aprobación
 | 9 | Cambio de precio invalida cache y préstamo usa nuevo precio | Parcial. | En Docker, el PUT de producto invalidó cache y la lectura/cotización interna devolvió el precio nuevo; se restauró el original. Falta crear un préstamo después del cambio y comprobar precio/versión persistidos en el préstamo. |
 | 10 | Modelo exportado equivalente a API | Aprobado. | Corrida de equivalencia: 200/200, mismatch 0, max error `2.22e-16`, modelo v1. |
 | 11 | Promoción/rollback de modelo | Parcial. | Se comprobó cambio de puntero antes; falta comprobar V2 en API después de reiniciar y rollback a V1 en API. |
-| 12 | Importar CSV dos veces sin duplicar | No verificado esta corrida. | Comparar conteos y resumen de filas de la API tras dos importaciones. |
+| 12 | Importar CSV dos veces sin duplicar | Aprobado. | CSV sintético de una fila: primera importación inserted=1/updated=0/rejected=0; segunda inserted=0/updated=1/rejected=0; se confirmó un solo perfil y se eliminó tras la prueba. |
 | 13 | Cliente no ve préstamos ajenos | Aprobado por prueba manual de API previa: dueño 200, ajeno 403; unitarias verifican solicitud ajena 403. | Conservar el resultado reproducible de integración al ejecutar la suite completa. |
 | 14 | Operación del negocio desde frontend | No verificado por navegador. | La aprobación del origen local fue denegada; requiere validación manual de la interfaz en demo. |
 | 15 | UI refleja transición asíncrona | Backend se probó en flujo feliz previo; UI no verificada visualmente. | Confirmar polling desde frontend contra el broker real. |

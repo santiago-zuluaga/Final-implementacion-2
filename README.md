@@ -66,7 +66,7 @@ La importación de clientes requiere un CSV con columnas del histórico. La API 
 
 ## Demo
 
-Sigue [docs/GUIA_DEMO.md](docs/GUIA_DEMO.md) para preparar datos y recorrer la interfaz con cuentas administrativas y de cliente. La guía distingue una demo operativa de las pruebas formales de aceptación que siguen pendientes.
+Sigue [docs/GUIA_DEMO.md](docs/GUIA_DEMO.md) para preparar datos y recorrer la interfaz con cuentas administrativas y de cliente. El [informe de Redis](docs/INFORME_REDIS.md) conserva la corrida medida y sus límites; la guía distingue una demo operativa de las pruebas formales de aceptación que siguen pendientes.
 
 Para seguimiento de pendientes y limitaciones reales, usa [docs/estado.md](docs/estado.md), [docs/architecture.md](docs/architecture.md), [docs/api.md](docs/api.md), [docs/events.md](docs/events.md), [docs/testing.md](docs/testing.md) y [docs/decisions.md](docs/decisions.md).
 

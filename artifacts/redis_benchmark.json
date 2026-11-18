@@ -1,0 +1,80 @@
+{
+  "generated_at": "2026-11-18T12:47:48.313780+00:00",
+  "method": "sequential read-only HTTP requests; 30 forced misses (10 per product) followed by 200 warm-cache reads",
+  "products": [
+    1,
+    2,
+    3
+  ],
+  "latency_ms": {
+    "miss": {
+      "n": 30,
+      "p50": 4.303,
+      "p95": 6.29,
+      "min": 3.569,
+      "max": 13.936
+    },
+    "hit": {
+      "n": 200,
+      "p50": 1.743,
+      "p95": 2.991,
+      "min": 1.392,
+      "max": 3.539
+    }
+  },
+  "cache_counter_delta": {
+    "hits": 200,
+    "misses": 30,
+    "fallbacks": 0
+  },
+  "process_metrics": {
+    "hit_rate": 0.8388429752066116,
+    "p50_ms": 0.361,
+    "p95_ms": 2.428
+  },
+  "docker_stats_snapshot_before": {
+    "products": {
+      "container": "finalparte-2-products-1",
+      "cpu": "20.01%",
+      "memory": "97.85MiB / 11.5GiB",
+      "memory_percent": "0.83%"
+    },
+    "postgres": {
+      "container": "finalparte-2-postgres-1",
+      "cpu": "2.83%",
+      "memory": "31.01MiB / 11.5GiB",
+      "memory_percent": "0.26%"
+    },
+    "redis": {
+      "container": "finalparte-2-redis-1",
+      "cpu": "0.75%",
+      "memory": "4.863MiB / 11.5GiB",
+      "memory_percent": "0.04%"
+    }
+  },
+  "docker_stats_snapshot_after": {
+    "products": {
+      "container": "finalparte-2-products-1",
+      "cpu": "19.07%",
+      "memory": "97.7MiB / 11.5GiB",
+      "memory_percent": "0.83%"
+    },
+    "postgres": {
+      "container": "finalparte-2-postgres-1",
+      "cpu": "0.51%",
+      "memory": "34.8MiB / 11.5GiB",
+      "memory_percent": "0.30%"
+    },
+    "redis": {
+      "container": "finalparte-2-redis-1",
+      "cpu": "0.41%",
+      "memory": "5.238MiB / 11.5GiB",
+      "memory_percent": "0.04%"
+    }
+  },
+  "limitations": [
+    "single local run; sequential traffic, not a capacity or production load test",
+    "docker stats CPU is an instantaneous snapshot; memory is the current resident usage",
+    "cache hit/miss counters are process-local and reset when Products restarts"
+  ]
+}
