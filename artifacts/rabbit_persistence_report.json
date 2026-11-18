@@ -1,0 +1,7 @@
+{
+  "queue_durable": true,
+  "persistent_message_survived": true,
+  "message_read_before_restart": true,
+  "message_read_after_restart": true,
+  "passed": true
+}

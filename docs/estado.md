@@ -15,6 +15,7 @@ Revisión: 18 de noviembre de 2026. La matriz detallada es [MATRIZ_CUMPLIMIENTO.
 - Autenticación JWT/roles `ADMIN` y `CUSTOMER`, PBKDF2, ownership de perfil/préstamos, protección de rutas admin/internas, expiración token 401; `.env` ignorado y no aparece en historial.
 - Productos cache-aside/invalidación/cotización vigente; Clientes import/upsert; Préstamos persistencia/idempotencia/outbox/máquina de estados; Inventario reserva atómica, movimientos, liberación, entrega y expiración.
 - RabbitMQ: outbox recuperado tras broker/consumidor detenidos; duplicados HTTP/evento sin efecto repetido; fallo transaccional genera tres reintentos y DLQ, sin mutación de stock/movimientos/outbox.
+- Persistencia RabbitMQ verificada con mensaje persistente en cola durable tras restart; la prueba retiró su cola temporal.
 - Aceptación: stock insuficiente, carrera por última unidad, precio/versión actualizada, cancelación/evento tardío/vencimiento, importación CSV doble, promoción/rollback y modelo equivalente probados. Resultado actual: 13/16 casos aprobados.
 - ML con split 60/20/20 seed 42, baseline + siete candidatas; v1 `logreg_c1` seleccionado por validación, threshold ~0.305. Equivalencia en 200 filas: mismatches 0, error máximo `2.22e-16`.
 - Redis: misses/hits, expiración, fallback con Redis detenido y recuperación probados. Benchmark y snapshots de recursos están en [`INFORME_REDIS.md`](INFORME_REDIS.md) y `artifacts/redis_benchmark.json`.
