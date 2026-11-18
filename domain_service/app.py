@@ -1,6 +1,6 @@
 """Four independently deployed CrediMarket APIs, selected by SERVICE."""
 from __future__ import annotations
-import asyncio, csv, hashlib, io, json, os, uuid
+import asyncio, csv, hashlib, hmac, io, json, os, uuid
 import statistics, time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -14,6 +14,7 @@ from fastapi import FastAPI, Header, HTTPException, UploadFile, File, Response
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal
 from sqlalchemy import create_engine, text
+from domain_service.security import hash_password, issue_token, verify_password, verify_token
 
 SERVICE=os.getenv('SERVICE','products')
 DB=os.getenv('DATABASE_URL','postgresql+psycopg://cm_products:dev_products@postgres:5432/credimarket')
@@ -22,12 +23,13 @@ REDIS_URL=os.getenv('REDIS_URL','redis://redis:6379/0')
 try: cache=redis.Redis.from_url(REDIS_URL,socket_connect_timeout=.2,socket_timeout=.2,decode_responses=True)
 except Exception: cache=None
 RABBIT=os.getenv('RABBIT_URL','amqp://guest:guest@rabbitmq:5672/')
+INTERNAL_API_TOKEN=os.getenv('INTERNAL_API_TOKEN','')
 ROOT=Path(__file__).resolve().parents[1]
 CACHE_METRICS={'hits':0,'misses':0,'fallbacks':0,'durations_ms':[]}
 
 SCHEMAS={
 'products':'''CREATE TABLE IF NOT EXISTS products(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,category TEXT NOT NULL,price_cop BIGINT NOT NULL CHECK(price_cop>0),version INT NOT NULL DEFAULT 1,active BOOLEAN NOT NULL DEFAULT TRUE,updated_at TIMESTAMPTZ NOT NULL DEFAULT now());''',
-'customers':'''CREATE TABLE IF NOT EXISTS customers(id TEXT PRIMARY KEY,name TEXT NOT NULL DEFAULT '',income BIGINT NOT NULL DEFAULT 0 CHECK(income>=0),obligations BIGINT NOT NULL DEFAULT 0 CHECK(obligations>=0),employment TEXT,tenure_months DOUBLE PRECISION,history_months DOUBLE PRECISION,prior_credits INT NOT NULL DEFAULT 0,late_payments INT NOT NULL DEFAULT 0,payment_on_time DOUBLE PRECISION,active BOOLEAN NOT NULL DEFAULT TRUE,updated_at TIMESTAMPTZ NOT NULL DEFAULT now());''',
+'customers':'''CREATE TABLE IF NOT EXISTS customers(id TEXT PRIMARY KEY,name TEXT NOT NULL DEFAULT '',income BIGINT NOT NULL DEFAULT 0 CHECK(income>=0),obligations BIGINT NOT NULL DEFAULT 0 CHECK(obligations>=0),employment TEXT,tenure_months DOUBLE PRECISION,history_months DOUBLE PRECISION,prior_credits INT NOT NULL DEFAULT 0,late_payments INT NOT NULL DEFAULT 0,payment_on_time DOUBLE PRECISION,active BOOLEAN NOT NULL DEFAULT TRUE,updated_at TIMESTAMPTZ NOT NULL DEFAULT now()); CREATE TABLE IF NOT EXISTS credentials(username TEXT PRIMARY KEY,password_salt TEXT NOT NULL,password_hash TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN ('ADMIN','CUSTOMER')),customer_id TEXT UNIQUE REFERENCES customers(id),active BOOLEAN NOT NULL DEFAULT TRUE,created_at TIMESTAMPTZ NOT NULL DEFAULT now());''',
 'inventory':'''CREATE TABLE IF NOT EXISTS stock(product_id BIGINT PRIMARY KEY,available INT NOT NULL CHECK(available>=0),reserved INT NOT NULL DEFAULT 0 CHECK(reserved>=0)); CREATE TABLE IF NOT EXISTS reservations(loan_id TEXT PRIMARY KEY,product_id BIGINT NOT NULL,quantity INT NOT NULL,status TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL DEFAULT now()+interval '30 minutes'); CREATE TABLE IF NOT EXISTS movements(id BIGSERIAL PRIMARY KEY,product_id BIGINT,loan_id TEXT,kind TEXT,quantity INT,created_at TIMESTAMPTZ DEFAULT now()); CREATE TABLE IF NOT EXISTS processed_messages(event_id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS outbox(event_id TEXT PRIMARY KEY,type TEXT NOT NULL,correlation_id TEXT NOT NULL,loan_id TEXT NOT NULL,payload JSONB NOT NULL,created_at TIMESTAMPTZ DEFAULT now(),published_at TIMESTAMPTZ);''',
 'loans':'''CREATE TABLE IF NOT EXISTS loans(id TEXT PRIMARY KEY,customer_id TEXT NOT NULL,product_id BIGINT NOT NULL,quantity INT NOT NULL,term_months INT NOT NULL,price_cop BIGINT NOT NULL,product_version INT NOT NULL,probability DOUBLE PRECISION NOT NULL,threshold DOUBLE PRECISION NOT NULL,model_version TEXT NOT NULL,status TEXT NOT NULL,reason TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT now()); CREATE TABLE IF NOT EXISTS idempotency(key TEXT PRIMARY KEY,request_hash TEXT NOT NULL,loan_id TEXT NOT NULL); CREATE TABLE IF NOT EXISTS outbox(event_id TEXT PRIMARY KEY,type TEXT NOT NULL,correlation_id TEXT NOT NULL,loan_id TEXT NOT NULL,payload JSONB NOT NULL,created_at TIMESTAMPTZ DEFAULT now(),published_at TIMESTAMPTZ); CREATE TABLE IF NOT EXISTS processed_messages(event_id TEXT PRIMARY KEY);'''}
 
@@ -35,6 +37,40 @@ def init_db():
     with engine.begin() as c:
         for ddl in SCHEMAS[SERVICE].split(';'):
             if ddl.strip(): c.execute(text(ddl))
+    if SERVICE=='customers': ensure_demo_admin()
+
+def ensure_demo_admin():
+    username=os.getenv('ADMIN_USERNAME','').strip()
+    password=os.getenv('ADMIN_PASSWORD','')
+    if not username or not password: return
+    if len(password)<12: raise RuntimeError('ADMIN_PASSWORD must contain at least 12 characters')
+    salt,digest=hash_password(password)
+    with engine.begin() as c:
+        existing=c.execute(text('SELECT password_salt,password_hash,role FROM credentials WHERE username=:u FOR UPDATE'),{'u':username}).mappings().first()
+        if not existing:
+            c.execute(text("INSERT INTO credentials(username,password_salt,password_hash,role) VALUES(:u,:s,:h,'ADMIN')"),{'u':username,'s':salt,'h':digest})
+        elif existing['role']!='ADMIN':
+            raise RuntimeError('ADMIN_USERNAME is already assigned to a customer account')
+        elif not verify_password(password,existing['password_salt'],existing['password_hash']):
+            c.execute(text("UPDATE credentials SET password_salt=:s,password_hash=:h,active=TRUE WHERE username=:u"),{'u':username,'s':salt,'h':digest})
+
+def current_actor(authorization:str|None):
+    if not authorization or not authorization.startswith('Bearer '): raise HTTPException(401,'Autenticación requerida')
+    try: return verify_token(authorization[7:].strip())
+    except Exception: raise HTTPException(401,'Token inválido o vencido')
+
+def require_role(authorization:str|None,*roles):
+    actor=current_actor(authorization)
+    if actor['role'] not in roles: raise HTTPException(403,'No tienes permisos para esta operación')
+    return actor
+
+def require_internal(token:str|None):
+    if not INTERNAL_API_TOKEN or not token or not hmac.compare_digest(token,INTERNAL_API_TOKEN):
+        raise HTTPException(401,'Token interno inválido')
+
+def password_record(password:str):
+    salt,digest=hash_password(password)
+    return salt,digest
 
 async def publish_outbox():
     while True:
@@ -188,6 +224,8 @@ async def lifespan(app):
 app=FastAPI(title=f'CrediMarket {SERVICE.title()}',lifespan=lifespan)
 class ProductIn(BaseModel): name:str; category:str; price_cop:int=Field(gt=0)
 class CustomerIn(BaseModel): id:str; name:str=''; income:int=Field(ge=0); obligations:int=Field(ge=0); employment:Literal['dependiente','independiente','temporal']|None=None; tenure_months:float|None=Field(default=None,ge=0,le=1000); history_months:float|None=Field(default=None,ge=0,le=1000); prior_credits:int=Field(default=0,ge=0,le=1000); late_payments:int=Field(default=0,ge=0,le=1000); payment_on_time:float|None=Field(default=None,ge=0,le=100); active:bool=True
+class AuthRegister(BaseModel): username:str=Field(min_length=3,max_length=64,pattern=r'^[A-Za-z0-9_.@-]+$'); password:str=Field(min_length=12,max_length=200); customer:CustomerIn
+class AuthLogin(BaseModel): username:str=Field(min_length=3,max_length=64); password:str=Field(min_length=1,max_length=200)
 class LoanIn(BaseModel): customer_id:str; product_id:int=Field(gt=0); quantity:int=Field(gt=0,le=10); term_months:int=Field(gt=0,le=60)
 class RiskIn(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -205,9 +243,41 @@ def ready():
     if SERVICE=='loans' and app.state.model is None: raise HTTPException(503,'No promoted model')
     return {'status':'ready'}
 
+@app.post('/auth/register',status_code=201)
+def auth_register(body:AuthRegister):
+    require('customers')
+    salt,digest=password_record(body.password)
+    profile=body.customer.model_copy(update={'active':True})
+    try:
+      with engine.begin() as c:
+        if c.execute(text('SELECT 1 FROM credentials WHERE username=:u'),{'u':body.username}).first(): raise HTTPException(409,'El usuario ya existe')
+        if c.execute(text('SELECT 1 FROM customers WHERE id=:id'),{'id':profile.id}).first(): raise HTTPException(409,'El identificador de cliente ya está registrado')
+        customer_create_db(c,profile)
+        c.execute(text("INSERT INTO credentials(username,password_salt,password_hash,role,customer_id) VALUES(:u,:s,:h,'CUSTOMER',:id)"),{'u':body.username,'s':salt,'h':digest,'id':profile.id})
+    except HTTPException: raise
+    except Exception: raise HTTPException(409,'No fue posible crear la cuenta')
+    return issue_access_response(body.username,'CUSTOMER',profile.id)
+
+@app.post('/auth/login')
+def auth_login(body:AuthLogin):
+    require('customers')
+    with engine.connect() as c:
+      row=c.execute(text("SELECT x.username,x.password_salt,x.password_hash,x.role,x.customer_id,coalesce(p.active,FALSE) AS customer_active FROM credentials x LEFT JOIN customers p ON p.id=x.customer_id WHERE x.username=:u AND x.active"),{'u':body.username}).mappings().first()
+    if not row or not verify_password(body.password,row['password_salt'],row['password_hash']): raise HTTPException(401,'Usuario o contraseña incorrectos')
+    if row['role']=='CUSTOMER' and not row['customer_active']: raise HTTPException(403,'La cuenta de cliente está inactiva')
+    return issue_access_response(row['username'],row['role'],row['customer_id'])
+
+@app.get('/auth/me')
+def auth_me(authorization:str|None=Header(None)):
+    actor=current_actor(authorization)
+    return {'username':actor['sub'],'role':actor['role'],'customer_id':actor.get('customer_id')}
+
+def issue_access_response(username,role,customer_id):
+    return {'access_token':issue_token(username,role,customer_id),'token_type':'bearer','expires_in':8*60*60,'user':{'username':username,'role':role,'customer_id':customer_id}}
+
 @app.post('/products',status_code=201)
-def product_create(body:ProductIn):
-    require('products')
+def product_create(body:ProductIn,authorization:str|None=Header(None)):
+    require('products'); require_role(authorization,'ADMIN')
     with engine.begin() as c: row=c.execute(text('INSERT INTO products(name,category,price_cop) VALUES(:n,:cat,:p) RETURNING *'),{'n':body.name,'cat':body.category,'p':body.price_cop}).mappings().one()
     return dict(row)
 @app.get('/products')
@@ -240,18 +310,19 @@ def get_product(id,quotation=False):
       CACHE_METRICS['durations_ms'].append((time.perf_counter()-started)*1000)
     return out
 @app.get('/cache/metrics')
-def cache_metrics():
-    require('products'); durations=CACHE_METRICS['durations_ms'][-500:]
+def cache_metrics(authorization:str|None=Header(None)):
+    require('products'); require_role(authorization,'ADMIN'); durations=CACHE_METRICS['durations_ms'][-500:]
     def percentile(p): return round(sorted(durations)[min(len(durations)-1,int((len(durations)-1)*p))] if durations else 0,3)
     total=CACHE_METRICS['hits']+CACHE_METRICS['misses']
     return {**{k:v for k,v in CACHE_METRICS.items() if k!='durations_ms'},'hit_rate':CACHE_METRICS['hits']/total if total else 0,'p50_ms':percentile(.50),'p95_ms':percentile(.95)}
 @app.get('/products/{id}')
 def product_get(id:int): return get_product(id)
 @app.get('/products/{id}/quotation')
-def quotation(id:int): return get_product(id,True)
+def quotation(id:int,x_internal_token:str|None=Header(None,alias='X-Internal-Token')):
+    require('products'); require_internal(x_internal_token); return get_product(id,True)
 @app.put('/products/{id}')
-def product_update(id:int,body:ProductIn):
-    require('products')
+def product_update(id:int,body:ProductIn,authorization:str|None=Header(None)):
+    require('products'); require_role(authorization,'ADMIN')
     with engine.begin() as c: r=c.execute(text('UPDATE products SET name=:n,category=:cat,price_cop=:p,version=version+1,updated_at=now() WHERE id=:id RETURNING *'),{'n':body.name,'cat':body.category,'p':body.price_cop,'id':id}).mappings().first()
     if not r: raise HTTPException(404,'Product not found')
     try:
@@ -259,8 +330,8 @@ def product_update(id:int,body:ProductIn):
     except Exception: pass
     return dict(r)
 @app.post('/products/{id}/deactivate')
-def product_deactivate(id:int):
-    require('products')
+def product_deactivate(id:int,authorization:str|None=Header(None)):
+    require('products'); require_role(authorization,'ADMIN')
     with engine.begin() as c: r=c.execute(text('UPDATE products SET active=FALSE,version=version+1,updated_at=now() WHERE id=:id RETURNING id'),{'id':id}).first()
     if not r: raise HTTPException(404,'Product not found')
     try:
@@ -269,24 +340,44 @@ def product_deactivate(id:int):
     return {'id':id,'active':False}
 
 @app.post('/customers',status_code=201)
-def customer_create(body:CustomerIn):
-    require('customers')
+def customer_create(body:CustomerIn,authorization:str|None=Header(None)):
+    require('customers'); require_role(authorization,'ADMIN')
     with engine.begin() as c:
       c.execute(text('INSERT INTO customers(id,name,income,obligations,employment,tenure_months,history_months,prior_credits,late_payments,payment_on_time,active) VALUES(:id,:name,:income,:obligations,:employment,:tenure_months,:history_months,:prior_credits,:late_payments,:payment_on_time,:active) ON CONFLICT(id) DO UPDATE SET name=excluded.name,income=excluded.income,obligations=excluded.obligations,employment=excluded.employment,tenure_months=excluded.tenure_months,history_months=excluded.history_months,prior_credits=excluded.prior_credits,late_payments=excluded.late_payments,payment_on_time=excluded.payment_on_time,active=excluded.active,updated_at=now()'),body.model_dump())
-    return customer_get(body.id)
+    return customer_row(body.id)
 @app.get('/customers')
-def customer_list():
+def customer_list(authorization:str|None=Header(None)):
     require('customers')
-    with engine.connect() as c: return [dict(r) for r in c.execute(text('SELECT * FROM customers ORDER BY id')).mappings()]
+    actor=require_role(authorization,'ADMIN','CUSTOMER')
+    query='SELECT * FROM customers ORDER BY id'; params={}
+    if actor['role']=='CUSTOMER': query='SELECT * FROM customers WHERE id=:id AND active'; params={'id':actor.get('customer_id')}
+    with engine.connect() as c: return [dict(r) for r in c.execute(text(query),params).mappings()]
 @app.get('/customers/{id}')
-def customer_get(id:str):
+def customer_get(id:str,authorization:str|None=Header(None),x_internal_token:str|None=Header(None,alias='X-Internal-Token')):
     require('customers')
+    if x_internal_token:
+      require_internal(x_internal_token)
+    else:
+      actor=require_role(authorization,'ADMIN','CUSTOMER')
+      if actor['role']=='CUSTOMER' and actor.get('customer_id')!=id: raise HTTPException(403,'Solo puedes consultar tu propio perfil')
+    return customer_row(id)
+def customer_row(id:str):
     with engine.connect() as c: r=c.execute(text('SELECT * FROM customers WHERE id=:id AND active'),{'id':id}).mappings().first()
     if not r: raise HTTPException(404,'Customer not found')
     return dict(r)
+@app.put('/customers/{id}')
+def customer_update(id:str,body:CustomerIn,authorization:str|None=Header(None)):
+    require('customers')
+    actor=require_role(authorization,'ADMIN','CUSTOMER')
+    if actor['role']=='CUSTOMER' and actor.get('customer_id')!=id: raise HTTPException(403,'Solo puedes actualizar tu propio perfil')
+    if body.id!=id: raise HTTPException(422,'El id del perfil debe coincidir con la ruta')
+    with engine.begin() as c:
+      r=c.execute(text('UPDATE customers SET name=:name,income=:income,obligations=:obligations,employment=:employment,tenure_months=:tenure_months,history_months=:history_months,prior_credits=:prior_credits,late_payments=:late_payments,payment_on_time=:payment_on_time,updated_at=now() WHERE id=:id AND active RETURNING id'),body.model_dump()).first()
+    if not r: raise HTTPException(404,'Customer not found')
+    return customer_row(id)
 @app.post('/customers/import')
-async def customer_import(file:UploadFile=File(...)):
-    require('customers'); content=(await file.read()).decode('utf-8-sig'); rows=list(csv.DictReader(io.StringIO(content))); inserted=updated=errors=0; details=[]
+async def customer_import(file:UploadFile=File(...),authorization:str|None=Header(None)):
+    require('customers'); require_role(authorization,'ADMIN'); content=(await file.read()).decode('utf-8-sig'); rows=list(csv.DictReader(io.StringIO(content))); inserted=updated=errors=0; details=[]
     for i,row in enumerate(rows,2):
       try:
         data=CustomerIn(id=row.get('cliente_id') or row.get('id'),name=row.get('nombre',''),income=int(row['ingresos_mensuales_cop']),obligations=int(row['obligaciones_mensuales_cop']),employment=row.get('tipo_empleo') or None,tenure_months=float(row['antiguedad_laboral_meses']) if row.get('antiguedad_laboral_meses') else None,history_months=float(row['meses_historial_crediticio']) if row.get('meses_historial_crediticio') else None,prior_credits=int(row.get('creditos_previos') or 0),late_payments=int(row.get('atrasos_previos_30d') or 0),payment_on_time=float(row['porcentaje_pago_puntual']) if row.get('porcentaje_pago_puntual') else None)
@@ -298,23 +389,28 @@ def customer_create_db(c,d):
     c.execute(text('INSERT INTO customers(id,name,income,obligations,employment,tenure_months,history_months,prior_credits,late_payments,payment_on_time,active) VALUES(:id,:name,:income,:obligations,:employment,:tenure_months,:history_months,:prior_credits,:late_payments,:payment_on_time,:active) ON CONFLICT(id) DO UPDATE SET name=excluded.name,income=excluded.income,obligations=excluded.obligations,employment=excluded.employment,tenure_months=excluded.tenure_months,history_months=excluded.history_months,prior_credits=excluded.prior_credits,late_payments=excluded.late_payments,payment_on_time=excluded.payment_on_time,active=excluded.active,updated_at=now()'),d.model_dump())
 
 @app.post('/inventory/stock',status_code=201)
-def stock_add(body:StockIn):
-    require('inventory')
+def stock_add(body:StockIn,authorization:str|None=Header(None)):
+    require('inventory'); require_role(authorization,'ADMIN')
     with engine.begin() as c:
       r=c.execute(text('INSERT INTO stock(product_id,available) VALUES(:id,:q) ON CONFLICT(product_id) DO UPDATE SET available=stock.available+:q RETURNING *'),{'id':body.product_id,'q':body.quantity}).mappings().one()
       c.execute(text("INSERT INTO movements(product_id,kind,quantity) VALUES(:p,'IN',:q)"),{'p':body.product_id,'q':body.quantity})
     return dict(r)
 @app.get('/inventory')
-def stock_list():
-    require('inventory')
+def stock_list(authorization:str|None=Header(None)):
+    require('inventory'); require_role(authorization,'ADMIN')
     with engine.connect() as c: return [dict(r) for r in c.execute(text('SELECT * FROM stock ORDER BY product_id')).mappings()]
 @app.get('/inventory/reservations')
-def inventory_reservations():
-    require('inventory')
+def inventory_reservations(authorization:str|None=Header(None)):
+    require('inventory'); require_role(authorization,'ADMIN')
     with engine.connect() as c: return [dict(r) for r in c.execute(text('SELECT * FROM reservations ORDER BY expires_at DESC LIMIT 200')).mappings()]
+@app.get('/inventory/movements')
+def inventory_movements(authorization:str|None=Header(None),limit:int=100,offset:int=0):
+    require('inventory'); require_role(authorization,'ADMIN')
+    if not 1<=limit<=200 or offset<0: raise HTTPException(422,'Paginación inválida')
+    with engine.connect() as c: return [dict(r) for r in c.execute(text('SELECT * FROM movements ORDER BY created_at DESC LIMIT :limit OFFSET :offset'),{'limit':limit,'offset':offset}).mappings()]
 @app.post('/inventory/reservations/{loan_id}/deliver')
-def delivery(loan_id:str):
-    require('inventory')
+def delivery(loan_id:str,authorization:str|None=Header(None)):
+    require('inventory'); require_role(authorization,'ADMIN')
     with engine.begin() as c:
       r=c.execute(text("UPDATE reservations SET status='DELIVERED' WHERE loan_id=:id AND status='RESERVED' RETURNING product_id,quantity"),{'id':loan_id}).mappings().first()
       if not r: raise HTTPException(409,'Reservation not active')
@@ -323,8 +419,9 @@ def delivery(loan_id:str):
     return {'status':'DELIVERED'}
 
 @app.post('/prestamos/{loan_id}/cancel')
-def cancel_loan(loan_id:str):
-    require('loans')
+def cancel_loan(loan_id:str,authorization:str|None=Header(None)):
+    require('loans'); actor=require_role(authorization,'ADMIN','CUSTOMER')
+    if actor['role']=='CUSTOMER' and not loan_owned_by(loan_id,actor.get('customer_id')): raise HTTPException(403,'No puedes cancelar una solicitud ajena')
     with engine.begin() as c:
       r=c.execute(text("UPDATE loans SET status='CANCELACION_PENDIENTE',reason='CANCELACION_USUARIO' WHERE id=:id AND status IN ('APROBADA','PENDIENTE_INVENTARIO') RETURNING id,product_id,quantity"),{'id':loan_id}).mappings().first()
       if not r: raise HTTPException(409,'Loan cannot be cancelled in its current state')
@@ -333,15 +430,18 @@ def cancel_loan(loan_id:str):
 
 @app.post('/loans')
 @app.post('/prestamos')
-def loan_create(body:LoanIn,response:Response,idempotency_key:str=Header(alias='Idempotency-Key')):
-    require('loans'); body_hash=hashlib.sha256(body.model_dump_json().encode()).hexdigest()
+def loan_create(body:LoanIn,response:Response,idempotency_key:str=Header(alias='Idempotency-Key'),authorization:str|None=Header(None)):
+    require('loans'); actor=require_role(authorization,'ADMIN','CUSTOMER')
+    if actor['role']=='CUSTOMER' and actor.get('customer_id')!=body.customer_id: raise HTTPException(403,'Solo puedes solicitar para tu propia cuenta')
+    body_hash=hashlib.sha256(body.model_dump_json().encode()).hexdigest()
     with engine.connect() as c: prev=c.execute(text('SELECT request_hash,loan_id FROM idempotency WHERE key=:k'),{'k':idempotency_key}).first()
     if prev:
       if prev[0]!=body_hash: raise HTTPException(409,'Idempotency-Key reused with different request')
-      return loan_get(prev[1])
+      return loan_result(prev[1])
     try:
-      customer=httpx.get(os.getenv('CUSTOMERS_URL','http://customers:8000')+f'/customers/{body.customer_id}',timeout=3).raise_for_status().json()
-      product=httpx.get(os.getenv('PRODUCTS_URL','http://products:8000')+f'/products/{body.product_id}/quotation',timeout=3).raise_for_status().json()
+      internal_headers={'X-Internal-Token':INTERNAL_API_TOKEN}
+      customer=httpx.get(os.getenv('CUSTOMERS_URL','http://customers:8000')+f'/customers/{body.customer_id}',headers=internal_headers,timeout=3).raise_for_status().json()
+      product=httpx.get(os.getenv('PRODUCTS_URL','http://products:8000')+f'/products/{body.product_id}/quotation',headers=internal_headers,timeout=3).raise_for_status().json()
     except httpx.HTTPStatusError as e: raise HTTPException(e.response.status_code,e.response.text)
     except Exception as e: raise HTTPException(503,f'Dependent service unavailable: {e}')
     price=int(product['price_cop']); amount=price*body.quantity
@@ -361,25 +461,51 @@ def loan_create(body:LoanIn,response:Response,idempotency_key:str=Header(alias='
       with engine.connect() as c: prev=c.execute(text('SELECT request_hash,loan_id FROM idempotency WHERE key=:k'),{'k':idempotency_key}).first()
       if prev:
         if prev[0]!=body_hash: raise HTTPException(409,'Idempotency-Key reused with different request')
-        return loan_get(prev[1])
+        return loan_result(prev[1])
       raise HTTPException(409,str(e))
     response.status_code=202 if accepted else 200
     return {'id':loan,'status':status,'reason':reason,'probabilidad_incumplimiento':p,'decision_riesgo':'FAVORABLE' if risk_favorable else 'DESFAVORABLE','model_version':m['model_version'],'price_cop':price,'product_version':product['version']}
 @app.get('/loans/{id}')
 @app.get('/prestamos/{id}')
-def loan_get(id:str):
-    require('loans')
+def loan_get(id:str,authorization:str|None=Header(None)):
+    require('loans'); actor=require_role(authorization,'ADMIN','CUSTOMER')
+    result=loan_result(id)
+    if actor['role']=='CUSTOMER' and result['customer_id']!=actor.get('customer_id'): raise HTTPException(403,'No puedes consultar una solicitud ajena')
+    return result
+@app.get('/prestamos')
+def loan_list(authorization:str|None=Header(None),limit:int=100,offset:int=0):
+    require('loans'); actor=require_role(authorization,'ADMIN','CUSTOMER')
+    if not 1<=limit<=200 or offset<0: raise HTTPException(422,'Paginación inválida')
+    query='SELECT * FROM loans ORDER BY created_at DESC LIMIT :limit OFFSET :offset'; params={'limit':limit,'offset':offset}
+    if actor['role']=='CUSTOMER': query='SELECT * FROM loans WHERE customer_id=:customer ORDER BY created_at DESC LIMIT :limit OFFSET :offset'; params['customer']=actor.get('customer_id')
+    with engine.connect() as c: rows=c.execute(text(query),params).mappings().all()
+    return [loan_dict(r) for r in rows]
+def loan_owned_by(id:str,customer_id:str|None):
+    with engine.connect() as c: return bool(c.execute(text('SELECT 1 FROM loans WHERE id=:id AND customer_id=:customer'),{'id':id,'customer':customer_id}).first())
+def loan_result(id:str):
     with engine.connect() as c: r=c.execute(text('SELECT * FROM loans WHERE id=:id'),{'id':id}).mappings().first()
     if not r: raise HTTPException(404,'Loan not found')
+    return loan_dict(r)
+def loan_dict(r):
     d=dict(r); d['probabilidad_incumplimiento']=d.pop('probability'); d['decision_riesgo']='FAVORABLE' if d['probabilidad_incumplimiento']<d['threshold'] else 'DESFAVORABLE'; return d
 @app.get('/modelo/info')
-def model_info():
-    require('loans')
+def model_info(authorization:str|None=Header(None)):
+    require('loans'); require_role(authorization,'ADMIN')
     if app.state.model is None: raise HTTPException(503,'No model promoted')
     return {k:app.state.manifest[k] for k in ['model_version','run_id','features','threshold']}
+@app.get('/drift')
+@app.get('/monitoring/drift')
+def drift_report(authorization:str|None=Header(None)):
+    require('loans'); require_role(authorization,'ADMIN')
+    path=ROOT/'artifacts'/'drift_report.json'
+    if not path.exists(): raise HTTPException(503,'Drift report is unavailable; run ml/drift.py')
+    report=json.loads(path.read_text(encoding='utf-8'))
+    return {**report,'data_drift_only':True,'performance_degradation_assessed':False,'limitation':'La cohorte nueva no tiene etiquetas; el PSI describe cambio de distribuciones, no mide desempeño ni concept drift.'}
 @app.post('/riesgo/predict')
-def risk_predict(body:RiskIn):
+def risk_predict(body:RiskIn,authorization:str|None=Header(None),x_internal_token:str|None=Header(None,alias='X-Internal-Token')):
     require('loans')
+    if x_internal_token: require_internal(x_internal_token)
+    else: require_role(authorization,'ADMIN')
     if app.state.model is None: raise HTTPException(503,'No model promoted')
     x=pd.DataFrame([body.model_dump()]); x['tipo_empleo']=x['tipo_empleo'].astype(object); x.loc[x['tipo_empleo'].isna(),'tipo_empleo']=float('nan'); x['sin_historial']=x['porcentaje_pago_puntual'].isna().astype(int); den=x['ingresos_mensuales_cop'].replace(0,float('nan')); x['ratio_endeudamiento']=(x['obligaciones_mensuales_cop']+x['cuota_estimada_cop'])/den; x['cuota_ingreso']=x['cuota_estimada_cop']/den
     p=float(app.state.model.predict_proba(x)[:,1][0]); m=app.state.manifest

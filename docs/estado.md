@@ -1,52 +1,38 @@
-# Estado verificado del proyecto
+# Estado de CrediMarket
 
-Fecha de revisión: 18 de noviembre de 2026.
+Revisión: 18 de noviembre de 2026. La matriz detallada es [MATRIZ_CUMPLIMIENTO.md](MATRIZ_CUMPLIMIENTO.md); pruebas y limitaciones por cada uno de los 16 escenarios están en [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md). Este resumen diferencia implementación de verificación y no representa una afirmación de cumplimiento total.
 
-## Material de partida disponible
+## Material de partida
 
-- Enunciado original copiado a `docs/Enunciado_CrediMarket.docx`.
-- Histórico real del curso: 12.000 × 15; hash SHA-256 `c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd`.
-- Solicitudes sin etiqueta: 200 × 14. Se usa solo para inferencia, equivalencia y drift descriptivo.
-- El repositorio original estaba vacío y no tenía remoto local configurado. Se inicializó Git, se enlazó el URL solicitado y se publicó el primer commit.
+- Enunciado del profesor conservado en `docs/Enunciado_CrediMarket.docx`.
+- Histórico: 12.000 filas × 15 columnas; SHA-256 `c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd`.
+- Solicitudes sin etiqueta: 200 × 14, reservadas para inferencia, equivalencia y drift descriptivo.
 
-## Implementado y comprobado
+## Implementado
 
-- Entrenamiento estratificado 60/20/20, semilla 42, baseline y siete candidatas de cuatro algoritmos; pipeline de imputación/codificación/escalado dentro del estimador.
-- Selección predefinida por AP de validación, desempate ROC-AUC; umbral por costos didácticos 5/1 sobre validación; test solo para la selección final.
-- Dieciséis ejecuciones finalizadas en un tracking server MLflow local persistente; una corrida fallida quedó identificada como FAILED. Modelo v1 con manifiesto/hash y v2 candidata de validación; promoción v2→v1 probada.
-- API FastAPI de riesgo carga un modelo promovido; equivalencia local/API en las 200 solicitudes: error absoluto máximo `2.22e-16`, dentro de `1e-9`.
-- PSI de las 200 solicitudes comparado con entrenamiento; ninguna feature supera 0,2. Esto no mide capacidad predictiva porque no hay etiqueta.
-- APIs en un código compartido desplegadas por separado: CRUD de Productos con Redis cache-aside y cotización directa de BD; Clientes con upsert e importación CSV; Préstamos con precio/version capturados, modelo, idempotency key, outbox, estados y timeout; Inventario con reserva atómica, movimiento, liberación, entrega, outbox y expiración.
-- Frontend React/TypeScript operativo para catálogo y edición/desactivación, registro/importación de clientes, solicitud con clave retenida, seguimiento por polling, registro de existencias, entrega/cancelación y modelo.
-- Compose describe PostgreSQL (cuatro bases/roles), RabbitMQ, Redis, MLflow y cuatro APIs más Nginx/React.
-- `python -m compileall -q domain_service loan_service ml tests`: correcto.
-- `python -m pytest -q`: 7 passed (un aviso de deprecación en Starlette/AnyIO).
-- `npm ci && npm run build`: correcto en Windows y en `node:24-slim` (Debian) durante la construcción de Docker. `node:24-alpine` fallaba al procesar `react-dom/client.js`; se fijó el stage de build a Debian slim.
-- `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilidades de producción.
-- `docker compose config --quiet`: correcto con `.env` local. `docker compose up --build -d` construyó y levantó todos los servicios.
+- Cuatro APIs de negocio FastAPI separadas, PostgreSQL con cuatro bases/roles lógicos, Redis, RabbitMQ, MLflow, frontend React/Nginx.
+- Autenticación JWT y roles `ADMIN`/`CUSTOMER`, hash de password PBKDF2, protección de rutas administrativas e internas y consulta/editado restringido al cliente dueño. Las rutas de navegador están integradas con token; la inspección visual requiere un browser aprobado.
+- Catálogo con cache-aside/invalidación/cotización de fuente de verdad; importación/upsert de clientes; creación idempotente de préstamos; outbox y máquina de estados; reserva atómica, movimientos, entrega y expiración.
+- ML: split estratificado 60/20/20 con semilla fija; baseline y candidatos múltiples; selección por validación; MLflow, modelos versionados, promoción/rollback, endpoint de predicción y reporte PSI sin labels.
+- Pruebas unitarias/ASGI de autenticación, seguridad básica y ML; script de equivalencia; seeder de demo.
 
-## Integración verificada en Docker
+## Verificado con evidencia disponible
 
-- Docker Desktop está activo. PostgreSQL, Redis, RabbitMQ y las cuatro APIs reportaron estado saludable; MLflow y frontend/Nginx quedaron ejecutándose.
-- El flujo probado en contenedores incluyó alta de cliente, catálogo/consulta, evaluación de riesgo, evento de reserva, entrega y estado final `COMPLETADA`; el inventario disminuyó de 5 a 4 unidades disponibles.
-- Equivalencia contra el endpoint del servicio de Préstamos con las 200 solicitudes: cero diferencias por encima de tolerancia (`2.22e-16` de máximo error absoluto).
-- Nginx sirvió la interfaz en `http://localhost:8080` y el proxy `/api/products`.
-- Se corrigió el filtro opcional de Productos: PostgreSQL rechazaba comparar un parámetro nulo sin tipo. La consulta solo añade `ILIKE` cuando se recibe `q`.
+- Compose completo arranca; PostgreSQL, Redis, RabbitMQ y cuatro APIs healthy. Frontend y MLflow están ejecutándose.
+- Flujo de negocio integrado probado previamente: riesgo favorable, reserva en RabbitMQ/Inventario y entrega produjeron estado `COMPLETADA`; disponibilidad bajó en una unidad.
+- Autorización integrada comprobada previamente: login ADMIN, cliente registrado, perfil propio 200, recurso ajeno 403, acción administrativa desde CUSTOMER 403, token inválido 401. Préstamo propio 200 y ajeno 403.
+- Idempotencia HTTP comprobada previamente: mismo cuerpo/clave devolvió el mismo ID; mismo key con cuerpo distinto dio 409.
+- Corrida actual: 11 tests aprobados; `npm run build` correcto; equivalencia 200 filas, cero mismatches, error máximo `2.22e-16`; seeder correcto; Redis miss/hit con muestra p50/p95 de 0.269 ms. No es un benchmark representativo.
 
-La ruta del flujo feliz está comprobada; faltan pruebas de fallos de broker para retries/DLQ, carrera de idempotencia, cancelación/expiración y dependencias no disponibles.
+## Pendiente antes de decir “100%”
 
-## Pendiente obligatorio o de alto impacto
+- Casos formales pendientes: rechazo y sin stock, carrera por última unidad, duplicado de evento, recuperación ante caída de RabbitMQ/consumidor, cancelación/evento tardío/expiración, caída/TTL Redis, precio actualizado de extremo a extremo, importación CSV repetida y rollback de modelo confirmado por API.
+- Medir cache fallback con Redis caído, además de CPU/memoria y latencias sobre carga representativa. Métricas de caché actuales son por proceso y memoria efímera.
+- Validar UI visual/polling/formularios/errores en navegador. El acceso automatizado al origen `http://localhost:8080` fue denegado por la aprobación del origen; se respetó el bloqueo y no se usaron rutas alternativas.
+- Revisar grants PostgreSQL y accesos cruzados con consultas de rol; revisar persistencia tras reinicio sin borrar volúmenes; verificar la topología retry/DLQ con fallo inyectado.
+- El grupo debe completar nombres reales, responsabilidades e historial/contribuciones. La información de integrantes no está en los archivos disponibles y no se inventa.
+- La guía de demo, decisión del broker, informe de pruebas y matriz ya existen; algunas evidencias que documentan son parciales y deben sustituirse por datos medidos al completar los casos.
 
-- Reintentos limitados (3, con cola TTL de 5 segundos) y dead letter queue implementados; falta forzar errores y confirmar los reintentos con el broker real.
-- Seguridad/autorización (JWT o equivalente), cuentas, sesión expirada y restricción de préstamos ajenos. La autenticación es opcional en la descripción, pero la rúbrica exige roles para aspirar al mejor nivel.
-- Vistas persistentes de préstamos propias (la UI conserva solicitudes de la sesión actual); controles completos de búsqueda y detalle.
-- Idempotencia HTTP bajo carreras concurrentes debe validarse con PostgreSQL; errores de API y contraejemplos de mensajes deben probarse.
-- Pruebas de aceptación 1–16 y resiliencia con broker/Redis/PostgreSQL detenidos.
-- MLflow en Compose, registro de V2, dashboard de promoción y rollback mediante reinicio del servicio; Drift endpoint/UI.
-- Historial explícito de transiciones del préstamo en persistencia; actualmente solo se guarda el estado y el motivo vigente.
-- Migraciones versionadas, CI, guía de demo con productos/stock inicial y nombres reales de los integrantes.
-- La decisión sobre broker ocupa menos de las 1–2 páginas solicitadas y debe ampliarse con evidencia tras probar DLQ/retries.
+## Seguridad y limitaciones
 
-## Riesgo de dependencia
-
-`npm audit --omit=dev` reporta 0 problemas de producción. El audit completo identifica 4 alertas de severidad alta ligadas a `picomatch` dentro de la toolchain de Vite de desarrollo/build. La app desplegada es el bundle estático servido por Nginx; el issue no está en runtime del navegador. Revisar el upstream antes de actualizar.
+`.env` local está ignorado por Git. No publicar credenciales, JWT ni tokens internos. Las métricas, thresholds y resultados proceden de datos sintéticos y no son política de crédito. PSI sin etiquetas solo detecta cambios descriptivos de distribución; no permite concluir concept drift ni pérdida de desempeño.

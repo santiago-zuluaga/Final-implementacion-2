@@ -30,6 +30,6 @@ La fuente durable de publicación es Outbox en la base local de cada servicio. E
 }
 ```
 
-No se publican ingresos ni otros datos financieros. El enunciado pide retención/replay como parte de la decisión del broker: no se requiere replay de eventos porque las bases y tablas de movimientos/outbox son la auditoría. Se documentó la intención; política de retry/DLQ todavía pendiente de implementación completa.
+No se publican ingresos ni otros datos financieros. El enunciado pide retención/replay como parte de la decisión del broker: no se requiere replay de eventos porque las bases y tablas de movimientos/outbox son la auditoría. La política retry/DLQ está en código y su comportamiento ante fallos todavía requiere inyección real para considerarse verificado.
 
-Comandos y eventos usan colas durable con DLX. Los errores de procesamiento hacen NACK sin requeue; una cola de retry aplica 5 segundos de TTL y dead-letters de vuelta a la cola original. Tras tres reintentos, el consumidor publica al DLQ correspondiente. Los mensajes fallidos se conservan para inspección. No fue posible validar la topología en el broker porque Docker Engine no estuvo disponible.
+Comandos y eventos usan colas durables con DLX. Los errores de procesamiento hacen NACK sin requeue; una cola de retry aplica 5 segundos de TTL y dead-letters de vuelta a la cola original. Tras tres reintentos, el consumidor publica al DLQ correspondiente. Los mensajes fallidos se conservan para inspección. Docker está activo y el flujo feliz está probado; falta provocar una excepción para observar el ciclo completo retry/DLQ.
