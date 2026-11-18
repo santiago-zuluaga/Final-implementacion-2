@@ -7,7 +7,7 @@ Registro conciso de verificaciones reproducibles del stack local. No incluye cre
 - `docker compose ps`: PostgreSQL, Redis, RabbitMQ y cuatro APIs healthy; frontend y MLflow en ejecución.
 - Aislamiento PostgreSQL: se revocó CONNECT de PUBLIC para las cuatro bases; consulta de `has_database_privilege` mostró permiso solo para cada pareja rol/base propia (12 pares cruzados denegados). Las cuatro APIs respondieron health `ok` después del cambio.
 - Durabilidad: `docker compose restart postgres` preservó el producto de demo; `/products/1` y login ADMIN respondieron 200 después del reinicio. RabbitMQ/MLflow no se reiniciaron en esta prueba.
-- `python -m pytest -q`: 11 passed; un `DeprecationWarning` de Starlette/AnyIO.
+- `python -m pytest -q`: 13 passed; un `DeprecationWarning` de Starlette/AnyIO. Incluye JWT vencido en ruta protegida y token interno inválido.
 - `npm --prefix frontend run build`: TypeScript y Vite exitosos.
 - `python ml/equivalence.py`: 200 filas; mismatches 0; max error `2.220446049250313e-16`; modelo v1.
 - `python scripts/seed_demo.py`: productos demostrativos 1–3 confirmados; no se reinició stock existente.
@@ -20,8 +20,10 @@ Registro conciso de verificaciones reproducibles del stack local. No incluye cre
 - Idempotencia: el mismo HTTP key/body devolvió el mismo préstamo; body distinto con key reutilizada dio 409. Se volvió a publicar el mismo comando de reserva y el mismo evento de reserva: antes/después se mantuvo una fila de reserva RESERVED, un movimiento y un evento; stock 0 disponible/1 reservado. Los registros temporales se limpiaron.
 - Cotización fresca: se calentó la clave del producto temporal, se actualizó a versión 2, se confirmó GET/cotización con valor nuevo y se creó un préstamo `APROBADA` que persistió precio y versión 2. Producto, stock, préstamo, reserva y movimientos temporales se limpiaron.
 - Recuperación: RabbitMQ se detuvo antes de crear un préstamo; tras reiniciarlo, el outbox publicó y el préstamo avanzó de pendiente a `APROBADA`. Después se detuvo Inventario con RabbitMQ activo; el comando persistió en cola y el consumidor lo procesó al reiniciar. Un movimiento/reserva por caso; filas temporales limpiadas.
+- Retry/DLQ: un probe de comando provocó una violación de constraint dentro de la transacción; alcanzó el DLQ tras tres reintentos. Stock, movimientos y outbox quedaron intactos; el probe se retiró del DLQ.
 - Estados terminales: cancelar una reserva produjo `CANCELADA`, reserva `RELEASED` y stock disponible=1/reservado=0. Un evento `InventarioReservado` tardío no reactivó el préstamo. En una segunda solicitud, se adelantó `expires_at`; worker produjo reserva `EXPIRED`, préstamo `CANCELADA` y devolvió el stock. Datos temporales limpiados.
 - Promoción/rollback: se promovió v2, reinició el servicio Préstamos y `/modelo/info` informó v2; se restauró v1, se reinició y la API informó v1. Puntero final: v1.
+- Auditoría de secretos: `.env` ignorado, no está en el historial ni en archivos tracked; ninguno de los valores secretos locales apareció en archivos versionados.
 - `git diff --check`: correcto (advertencias de conversión LF/CRLF de Git en archivos modificados).
 - Navegador: la solicitud de acceso a `http://localhost:8080` fue denegada por la aprobación del origen; no se hicieron más intentos de interfaz automatizada.
 
@@ -32,3 +34,5 @@ Registro conciso de verificaciones reproducibles del stack local. No incluye cre
 - Repetición HTTP con igual clave/cuerpo devolvió el mismo préstamo; clave repetida con cuerpo distinto dio 409.
 
 Los casos restantes se mantienen sin verificar en `PRUEBAS_ACEPTACION.md` y `MATRIZ_CUMPLIMIENTO.md`.
+
+- `python ml/audit_data.py`: auditoría reproducible de ambos CSV; resumen de dimensiones, tipos, faltantes, duplicados y hash en `artifacts/data_audit.json`; diccionario agregado en `docs/DICCIONARIO_DATOS.md`.

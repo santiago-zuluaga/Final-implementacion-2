@@ -65,3 +65,39 @@ def test_customer_cannot_request_a_loan_for_another_customer(monkeypatch):
         assert asyncio.run(request()).status_code == 403
     finally:
         service.SERVICE = previous
+
+
+def test_expired_jwt_is_rejected_by_protected_route(monkeypatch):
+    monkeypatch.setenv('JWT_SECRET', 'unit-test-jwt-secret-not-for-production-123456789')
+    import domain_service.app as service
+    previous = service.SERVICE
+    service.SERVICE = 'products'
+    try:
+        monkeypatch.setattr(security.time, 'time', lambda: 1000)
+        token = security.issue_token('admin', 'ADMIN', None)
+        monkeypatch.setattr(security.time, 'time', lambda: 1000 + security.JWT_TTL_SECONDS)
+
+        async def request():
+            transport = httpx.ASGITransport(app=service.app)
+            async with httpx.AsyncClient(transport=transport, base_url='http://service.test') as client:
+                return await client.get('/cache/metrics', headers={'Authorization': f'Bearer {token}'})
+
+        assert asyncio.run(request()).status_code == 401
+    finally:
+        service.SERVICE = previous
+
+
+def test_internal_service_route_rejects_wrong_token(monkeypatch):
+    monkeypatch.setenv('INTERNAL_API_TOKEN', 'expected-internal-token-for-tests')
+    import domain_service.app as service
+    previous = service.SERVICE
+    service.SERVICE = 'products'
+    try:
+        async def request():
+            transport = httpx.ASGITransport(app=service.app)
+            async with httpx.AsyncClient(transport=transport, base_url='http://service.test') as client:
+                return await client.get('/products/1/quotation', headers={'X-Internal-Token': 'wrong-token'})
+
+        assert asyncio.run(request()).status_code == 401
+    finally:
+        service.SERVICE = previous

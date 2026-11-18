@@ -30,6 +30,6 @@ La fuente durable de publicación es Outbox en la base local de cada servicio. E
 }
 ```
 
-No se publican ingresos ni otros datos financieros. El enunciado pide retención/replay como parte de la decisión del broker: no se requiere replay de eventos porque las bases y tablas de movimientos/outbox son la auditoría. La política retry/DLQ está en código y su comportamiento ante fallos todavía requiere inyección real para considerarse verificado.
+No se publican ingresos ni otros datos financieros. El enunciado pide retención/replay como parte de la decisión del broker: no se requiere replay de eventos porque las bases y tablas de movimientos/outbox son la auditoría. Los supuestos de retención y replay están desarrollados en `decisions.md`.
 
-Comandos y eventos usan colas durables con DLX. Los errores de procesamiento hacen NACK sin requeue; una cola de retry aplica 5 segundos de TTL y dead-letters de vuelta a la cola original. Tras tres reintentos, el consumidor publica al DLQ correspondiente. Los mensajes fallidos se conservan para inspección. Docker está activo y el flujo feliz está probado; falta provocar una excepción para observar el ciclo completo retry/DLQ.
+Comandos y eventos usan colas durables con DLX. Los errores de procesamiento hacen NACK sin requeue; una cola de retry aplica 5 segundos de TTL y dead-letters de vuelta a la cola original. Tras tres reintentos, el consumidor publica al DLQ correspondiente. `scripts/acceptance_retry_dlq.py` verificó el ciclo de Inventario: una violación de constraint dentro de la transacción llegó al DLQ con `attempts=3`; stock, movimientos y outbox no cambiaron, y el probe se retiró del DLQ. La recuperación de outbox ante caída de RabbitMQ/Inventario se verifica aparte con `scripts/acceptance_recovery.py`.

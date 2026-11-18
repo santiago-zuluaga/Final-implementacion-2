@@ -117,7 +117,7 @@ async def event_consumer(app):
               async with msg.process(requeue=False):
                 attempts=sum(int(entry.get('count',0)) for entry in (msg.headers or {}).get('x-death',[]) if entry.get('queue')=='loans.events.retry')
                 if attempts>=3:
-                  await dlx.publish(aio_pika.Message(msg.body,delivery_mode=aio_pika.DeliveryMode.PERSISTENT,headers={'failure':'retry limit exceeded'}),routing_key='loans.events.failed'); continue
+                  await dlx.publish(aio_pika.Message(msg.body,delivery_mode=aio_pika.DeliveryMode.PERSISTENT,headers={'failure':'retry limit exceeded','attempts':attempts}),routing_key='loans.events.failed'); continue
                 d=json.loads(msg.body); await handle_loan_event(d)
       except asyncio.CancelledError: raise
       except Exception as e: print(f'event consumer reconnect: {e}',flush=True); await asyncio.sleep(2)
@@ -141,7 +141,7 @@ async def inventory_consumer():
               async with msg.process(requeue=False):
                 attempts=sum(int(entry.get('count',0)) for entry in (msg.headers or {}).get('x-death',[]) if entry.get('queue')=='inventory.commands.retry')
                 if attempts>=3:
-                  await dlx.publish(aio_pika.Message(msg.body,delivery_mode=aio_pika.DeliveryMode.PERSISTENT,headers={'failure':'retry limit exceeded'}),routing_key='inventory.commands.failed'); continue
+                  await dlx.publish(aio_pika.Message(msg.body,delivery_mode=aio_pika.DeliveryMode.PERSISTENT,headers={'failure':'retry limit exceeded','attempts':attempts}),routing_key='inventory.commands.failed'); continue
                 d=json.loads(msg.body); payload=d['payload']; loan=d['prestamo_id']; is_release=d['type']=='LiberarReserva'; product=int(payload.get('producto_id',0)); qty=int(payload.get('cantidad',0))
                 with engine.begin() as c:
                   old=c.execute(text('SELECT status FROM reservations WHERE loan_id=:id FOR UPDATE'),{'id':loan}).first()

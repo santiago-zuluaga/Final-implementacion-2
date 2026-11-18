@@ -1,0 +1,441 @@
+{
+  "training": {
+    "file": "prestamos_entrenamiento.csv",
+    "sha256": "c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd",
+    "rows": 12000,
+    "columns_count": 15,
+    "exact_duplicate_rows": 0,
+    "columns": {
+      "solicitud_id": {
+        "dtype": "object",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 12000,
+        "top_values": {
+          "SOL-0011984": 1,
+          "SOL-0011983": 1,
+          "SOL-0011982": 1,
+          "SOL-0011981": 1,
+          "SOL-0011980": 1,
+          "SOL-0011979": 1,
+          "SOL-0011978": 1,
+          "SOL-0011977": 1,
+          "SOL-0011976": 1,
+          "SOL-0011975": 1,
+          "SOL-0011974": 1,
+          "SOL-0011973": 1,
+          "SOL-0011972": 1,
+          "SOL-0011971": 1,
+          "SOL-0011970": 1,
+          "SOL-0011969": 1,
+          "SOL-0000032": 1,
+          "SOL-0000031": 1,
+          "SOL-0000030": 1,
+          "SOL-0000029": 1
+        }
+      },
+      "cliente_id": {
+        "dtype": "object",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 12000,
+        "top_values": {
+          "CLI-0011984": 1,
+          "CLI-0011983": 1,
+          "CLI-0011982": 1,
+          "CLI-0011981": 1,
+          "CLI-0011980": 1,
+          "CLI-0011979": 1,
+          "CLI-0011978": 1,
+          "CLI-0011977": 1,
+          "CLI-0011976": 1,
+          "CLI-0011975": 1,
+          "CLI-0011974": 1,
+          "CLI-0011973": 1,
+          "CLI-0011972": 1,
+          "CLI-0011971": 1,
+          "CLI-0011970": 1,
+          "CLI-0011969": 1,
+          "CLI-0000032": 1,
+          "CLI-0000031": 1,
+          "CLI-0000030": 1,
+          "CLI-0000029": 1
+        }
+      },
+      "ingresos_mensuales_cop": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 6222,
+        "range": {
+          "min": 1400000.0,
+          "median": 3905000.0,
+          "max": 28000000.0
+        }
+      },
+      "obligaciones_mensuales_cop": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 3617,
+        "range": {
+          "min": 11000.0,
+          "median": 972000.0,
+          "max": 16485000.0
+        }
+      },
+      "tipo_empleo": {
+        "dtype": "object",
+        "missing": 93,
+        "missing_rate": 0.00775,
+        "unique_non_null": 3,
+        "top_values": {
+          "dependiente": 6765,
+          "independiente": 3461,
+          "temporal": 1681,
+          "nan": 93
+        }
+      },
+      "antiguedad_laboral_meses": {
+        "dtype": "float64",
+        "missing": 91,
+        "missing_rate": 0.007583,
+        "unique_non_null": 187,
+        "range": {
+          "min": 0.0,
+          "median": 31.0,
+          "max": 240.0
+        }
+      },
+      "meses_historial_crediticio": {
+        "dtype": "float64",
+        "missing": 97,
+        "missing_rate": 0.008083,
+        "unique_non_null": 240,
+        "range": {
+          "min": 0.0,
+          "median": 48.0,
+          "max": 300.0
+        }
+      },
+      "creditos_previos": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 18,
+        "range": {
+          "min": 0.0,
+          "median": 2.0,
+          "max": 19.0
+        }
+      },
+      "atrasos_previos_30d": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 13,
+        "range": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 12.0
+        }
+      },
+      "porcentaje_pago_puntual": {
+        "dtype": "float64",
+        "missing": 2473,
+        "missing_rate": 0.206083,
+        "unique_non_null": 3707,
+        "range": {
+          "min": 12.68,
+          "median": 86.09,
+          "max": 99.97
+        }
+      },
+      "monto_solicitado_cop": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 6024,
+        "range": {
+          "min": 500000.0,
+          "median": 3200000.0,
+          "max": 15000000.0
+        }
+      },
+      "plazo_meses": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 5,
+        "range": {
+          "min": 6.0,
+          "median": 18.0,
+          "max": 36.0
+        }
+      },
+      "tasa_mensual_simulada": {
+        "dtype": "float64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 1,
+        "range": {
+          "min": 0.018,
+          "median": 0.018,
+          "max": 0.018
+        }
+      },
+      "cuota_estimada_cop": {
+        "dtype": "float64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 9875,
+        "range": {
+          "min": 18991.92,
+          "median": 214888.96000000002,
+          "max": 2659841.03
+        }
+      },
+      "incumplimiento_90d": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 2,
+        "range": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 1.0
+        }
+      }
+    },
+    "identifier_checks": {
+      "solicitud_id": {
+        "unique": 12000,
+        "missing": 0,
+        "duplicates": 0
+      },
+      "cliente_id": {
+        "unique": 12000,
+        "missing": 0,
+        "duplicates": 0
+      }
+    },
+    "target": {
+      "name": "incumplimiento_90d",
+      "class_counts": {
+        "0": 8333,
+        "1": 3667
+      },
+      "positive_rate": 0.3055833333333333
+    }
+  },
+  "unlabeled": {
+    "file": "solicitudes_nuevas.csv",
+    "sha256": "1430d7b34e924d5e4170c4fb9d9a412c1000af17c062af513ef15e44a1a7f1f7",
+    "rows": 200,
+    "columns_count": 14,
+    "exact_duplicate_rows": 0,
+    "columns": {
+      "solicitud_id": {
+        "dtype": "object",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 200,
+        "top_values": {
+          "SOL-0012001": 1,
+          "SOL-0012002": 1,
+          "SOL-0012003": 1,
+          "SOL-0012004": 1,
+          "SOL-0012005": 1,
+          "SOL-0012006": 1,
+          "SOL-0012007": 1,
+          "SOL-0012008": 1,
+          "SOL-0012009": 1,
+          "SOL-0012010": 1,
+          "SOL-0012011": 1,
+          "SOL-0012012": 1,
+          "SOL-0012013": 1,
+          "SOL-0012014": 1,
+          "SOL-0012015": 1,
+          "SOL-0012016": 1,
+          "SOL-0012017": 1,
+          "SOL-0012018": 1,
+          "SOL-0012019": 1,
+          "SOL-0012020": 1
+        }
+      },
+      "cliente_id": {
+        "dtype": "object",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 200,
+        "top_values": {
+          "CLI-0012001": 1,
+          "CLI-0012002": 1,
+          "CLI-0012003": 1,
+          "CLI-0012004": 1,
+          "CLI-0012005": 1,
+          "CLI-0012006": 1,
+          "CLI-0012007": 1,
+          "CLI-0012008": 1,
+          "CLI-0012009": 1,
+          "CLI-0012010": 1,
+          "CLI-0012011": 1,
+          "CLI-0012012": 1,
+          "CLI-0012013": 1,
+          "CLI-0012014": 1,
+          "CLI-0012015": 1,
+          "CLI-0012016": 1,
+          "CLI-0012017": 1,
+          "CLI-0012018": 1,
+          "CLI-0012019": 1,
+          "CLI-0012020": 1
+        }
+      },
+      "ingresos_mensuales_cop": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 188,
+        "range": {
+          "min": 1400000.0,
+          "median": 3732000.0,
+          "max": 28000000.0
+        }
+      },
+      "obligaciones_mensuales_cop": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 194,
+        "range": {
+          "min": 59000.0,
+          "median": 1036000.0,
+          "max": 9836000.0
+        }
+      },
+      "tipo_empleo": {
+        "dtype": "object",
+        "missing": 2,
+        "missing_rate": 0.01,
+        "unique_non_null": 3,
+        "top_values": {
+          "dependiente": 102,
+          "independiente": 70,
+          "temporal": 26,
+          "nan": 2
+        }
+      },
+      "antiguedad_laboral_meses": {
+        "dtype": "float64",
+        "missing": 1,
+        "missing_rate": 0.005,
+        "unique_non_null": 85,
+        "range": {
+          "min": 0.0,
+          "median": 36.0,
+          "max": 160.0
+        }
+      },
+      "meses_historial_crediticio": {
+        "dtype": "float64",
+        "missing": 1,
+        "missing_rate": 0.005,
+        "unique_non_null": 102,
+        "range": {
+          "min": 3.0,
+          "median": 54.0,
+          "max": 189.0
+        }
+      },
+      "creditos_previos": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 10,
+        "range": {
+          "min": 0.0,
+          "median": 2.0,
+          "max": 11.0
+        }
+      },
+      "atrasos_previos_30d": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 9,
+        "range": {
+          "min": 0.0,
+          "median": 0.0,
+          "max": 8.0
+        }
+      },
+      "porcentaje_pago_puntual": {
+        "dtype": "float64",
+        "missing": 43,
+        "missing_rate": 0.215,
+        "unique_non_null": 155,
+        "range": {
+          "min": 53.03,
+          "median": 87.85,
+          "max": 99.83
+        }
+      },
+      "monto_solicitado_cop": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 199,
+        "range": {
+          "min": 500000.0,
+          "median": 2935500.0,
+          "max": 15000000.0
+        }
+      },
+      "plazo_meses": {
+        "dtype": "int64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 5,
+        "range": {
+          "min": 6.0,
+          "median": 18.0,
+          "max": 36.0
+        }
+      },
+      "tasa_mensual_simulada": {
+        "dtype": "float64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 1,
+        "range": {
+          "min": 0.018,
+          "median": 0.018,
+          "max": 0.018
+        }
+      },
+      "cuota_estimada_cop": {
+        "dtype": "float64",
+        "missing": 0,
+        "missing_rate": 0.0,
+        "unique_non_null": 200,
+        "range": {
+          "min": 36008.67,
+          "median": 194759.225,
+          "max": 2134788.41
+        }
+      }
+    },
+    "identifier_checks": {
+      "solicitud_id": {
+        "unique": 200,
+        "missing": 0,
+        "duplicates": 0
+      },
+      "cliente_id": {
+        "unique": 200,
+        "missing": 0,
+        "duplicates": 0
+      }
+    }
+  }
+}

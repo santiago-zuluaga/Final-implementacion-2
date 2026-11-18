@@ -1,39 +1,32 @@
 # Estado de CrediMarket
 
-Revisión: 18 de noviembre de 2026. La matriz detallada es [MATRIZ_CUMPLIMIENTO.md](MATRIZ_CUMPLIMIENTO.md); pruebas y limitaciones por cada uno de los 16 escenarios están en [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md). Este resumen diferencia implementación de verificación y no representa una afirmación de cumplimiento total.
+Revisión: 18 de noviembre de 2026. La matriz detallada es [MATRIZ_CUMPLIMIENTO.md](MATRIZ_CUMPLIMIENTO.md); pruebas y límites de los 16 casos están en [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md). El trabajo sigue en curso y no se presenta como cumplimiento del 100%.
 
 ## Material de partida
 
-- Enunciado del profesor conservado en `docs/Enunciado_CrediMarket.docx`.
-- Histórico: 12.000 filas × 15 columnas; SHA-256 `c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd`.
-- Solicitudes sin etiqueta: 200 × 14, reservadas para inferencia, equivalencia y drift descriptivo.
+- Enunciado del profesor: `docs/Enunciado_CrediMarket.docx`.
+- Histórico: 12.000 × 15, SHA-256 `c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd`.
+- Solicitudes sin etiqueta: 200 × 14; reservadas para inferencia, equivalencia y análisis descriptivo de drift.
+- [`DICCIONARIO_DATOS.md`](DICCIONARIO_DATOS.md) y `artifacts/data_audit.json` registran el esquema y auditoría de ambos archivos.
 
-## Implementado
+## Implementado y verificado
 
-- Cuatro APIs de negocio FastAPI separadas, PostgreSQL con cuatro bases/roles lógicos, Redis, RabbitMQ, MLflow, frontend React/Nginx.
-- Autenticación JWT y roles `ADMIN`/`CUSTOMER`, hash de password PBKDF2, protección de rutas administrativas e internas y consulta/editado restringido al cliente dueño. Las rutas de navegador están integradas con token; la inspección visual requiere un browser aprobado.
-- Catálogo con cache-aside/invalidación/cotización de fuente de verdad; importación/upsert de clientes; creación idempotente de préstamos; outbox y máquina de estados; reserva atómica, movimientos, entrega y expiración.
-- ML: split estratificado 60/20/20 con semilla fija; baseline y candidatos múltiples; selección por validación; MLflow, modelos versionados, promoción/rollback, endpoint de predicción y reporte PSI sin labels.
-- Pruebas unitarias/ASGI de autenticación, seguridad básica y ML; script de equivalencia; seeder de demo.
+- Cuatro APIs FastAPI independientes con cuatro bases PostgreSQL y roles; pruebas confirmaron CONNECT solo a la base de cada dominio.
+- Autenticación JWT/roles `ADMIN` y `CUSTOMER`, PBKDF2, ownership de perfil/préstamos, protección de rutas admin/internas, expiración token 401; `.env` ignorado y no aparece en historial.
+- Productos cache-aside/invalidación/cotización vigente; Clientes import/upsert; Préstamos persistencia/idempotencia/outbox/máquina de estados; Inventario reserva atómica, movimientos, liberación, entrega y expiración.
+- RabbitMQ: outbox recuperado tras broker/consumidor detenidos; duplicados HTTP/evento sin efecto repetido; fallo transaccional genera tres reintentos y DLQ, sin mutación de stock/movimientos/outbox.
+- Aceptación: stock insuficiente, carrera por última unidad, precio/versión actualizada, cancelación/evento tardío/vencimiento, importación CSV doble, promoción/rollback y modelo equivalente probados. Resultado actual: 13/16 casos aprobados.
+- ML con split 60/20/20 seed 42, baseline + siete candidatas; v1 `logreg_c1` seleccionado por validación, threshold ~0.305. Equivalencia en 200 filas: mismatches 0, error máximo `2.22e-16`.
+- Redis: misses/hits, expiración, fallback con Redis detenido y recuperación probados. Benchmark y snapshots de recursos están en [`INFORME_REDIS.md`](INFORME_REDIS.md) y `artifacts/redis_benchmark.json`.
+- `pytest -q`: 13 passed; build frontend Vite/TypeScript correcto; servicios Docker healthy.
+- PostgreSQL restart conservó el catálogo y permitió login ADMIN; otros volúmenes aún no se reiniciaron individualmente.
 
-## Verificado con evidencia disponible
+## Pendientes antes de completar
 
-- Compose completo arranca; PostgreSQL, Redis, RabbitMQ y cuatro APIs healthy. Frontend y MLflow están ejecutándose.
-- PostgreSQL: cada rol de dominio conecta a su base y no tiene CONNECT a las otras tres; `PUBLIC` fue revocado en bases existentes y el script de init aplica la restricción en nuevas instalaciones.
-- Flujo de negocio integrado probado previamente: riesgo favorable, reserva en RabbitMQ/Inventario y entrega produjeron estado `COMPLETADA`; disponibilidad bajó en una unidad.
-- Autorización integrada comprobada previamente: login ADMIN, cliente registrado, perfil propio 200, recurso ajeno 403, acción administrativa desde CUSTOMER 403, token inválido 401. Préstamo propio 200 y ajeno 403.
-- Idempotencia HTTP comprobada previamente: mismo cuerpo/clave devolvió el mismo ID; mismo key con cuerpo distinto dio 409.
-- Corrida actual: 11 tests aprobados; `npm run build` correcto; equivalencia 200 filas, cero mismatches, error máximo `2.22e-16`; seeder correcto; Redis miss/hit con muestra p50/p95 de 0.269 ms. No es un benchmark representativo.
+- Casos 14–16: validar flujo real desde la interfaz, polling de estado, formularios/errores y sesión vencida en navegador. La aprobación para abrir `http://localhost:8080` fue denegada por el gate de origen en esta sesión; no se intentó un camino alternativo.
+- La matriz conserva 28 requisitos `IMPLEMENTADO_NO_VERIFICADO`; incluye auditoría exhaustiva de endpoints/OpenAPI, pruebas de DB/MLflow restart y timeout de solicitud aún pendiente.
+- TEAM-01 requiere nombres, responsabilidades y aportes reales del grupo, que no estaban en los archivos recibidos y no se inventaron.
 
-## Pendiente antes de decir “100%”
+## Límites
 
-- Casos formales pendientes: rechazo y sin stock, carrera por última unidad, duplicado de evento, recuperación ante caída de RabbitMQ/consumidor, cancelación/evento tardío/expiración, caída/TTL Redis, precio actualizado de extremo a extremo, importación CSV repetida y rollback de modelo confirmado por API.
-- Medir cache fallback con Redis caído, además de CPU/memoria y latencias sobre carga representativa. Métricas de caché actuales son por proceso y memoria efímera.
-- Validar UI visual/polling/formularios/errores en navegador. El acceso automatizado al origen `http://localhost:8080` fue denegado por la aprobación del origen; se respetó el bloqueo y no se usaron rutas alternativas.
-- Revisar grants PostgreSQL y accesos cruzados con consultas de rol; revisar persistencia tras reinicio sin borrar volúmenes; verificar la topología retry/DLQ con fallo inyectado.
-- El grupo debe completar nombres reales, responsabilidades e historial/contribuciones. La información de integrantes no está en los archivos disponibles y no se inventa.
-- La guía de demo, decisión del broker, informe de pruebas y matriz ya existen; algunas evidencias que documentan son parciales y deben sustituirse por datos medidos al completar los casos.
-
-## Seguridad y limitaciones
-
-`.env` local está ignorado por Git. No publicar credenciales, JWT ni tokens internos. Las métricas, thresholds y resultados proceden de datos sintéticos y no son política de crédito. PSI sin etiquetas solo detecta cambios descriptivos de distribución; no permite concluir concept drift ni pérdida de desempeño.
+Las métricas, ejemplos, datos y umbral de riesgo son sintéticos. PSI sin etiquetas describe cambios de distribución; no permite concluir concept drift ni caída del desempeño. Los resultados de caché y Docker son muestras locales, no una garantía de producción.

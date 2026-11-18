@@ -1,68 +1,40 @@
-# Informe autónomo — CrediMarket
+# Informe de avance — CrediMarket
 
-Fecha: 18 de noviembre de 2026.
+**Corte:** 18 de noviembre de 2026. **Fuente normativa:** [`Enunciado_CrediMarket.docx`](Enunciado_CrediMarket.docx).
 
-## Resumen
+## Estado
 
-Se avanzó desde un repositorio vacío hasta una primera implementación del ciclo ML, cuatro APIs de dominio independientes, interfaz React y configuración de despliegue. El enunciado original está en `docs/Enunciado_CrediMarket.docx`. Los avances se publican en GitHub por hitos.
+La solución implementa los cuatro dominios, su integración y los artefactos principales. La verificación actual cubre 41 de 72 requisitos trazados y 13 de 16 casos de aceptación; no se presenta como un cumplimiento del 100%. La [matriz de cumplimiento](MATRIZ_CUMPLIMIENTO.md) y el [registro de pruebas](PRUEBAS_ACEPTACION.md) muestran cada requisito y su evidencia.
 
-## Arquitectura
+## Arquitectura y operación
 
-Productos, Clientes, Préstamos e Inventario son procesos FastAPI separados, con una base PostgreSQL y un rol propio cada uno. Redis se usa en Productos. Préstamos e Inventario intercambian comandos/eventos versionados por RabbitMQ usando outbox y consumidores deduplicados. Préstamos carga el pipeline de ML promovido; MLflow usa SQLite y almacenamiento persistente de artefactos. React se sirve detrás de Nginx.
+Productos, Clientes, Préstamos e Inventario son APIs FastAPI independientes, cada una con base y rol PostgreSQL propios. Se revocó `CONNECT` público a las cuatro bases y se verificaron denegaciones cruzadas. Préstamos consulta Clientes/Productos por APIs internas autenticadas. RabbitMQ transporta comandos/eventos persistentes; Préstamos e Inventario usan outbox y deduplicación. Redis opera cache-aside en Productos. React se sirve desde Nginx con proxy de API; MLflow está configurado con volúmenes persistentes; la supervivencia de tracking y artefactos tras reinicio sigue pendiente de prueba.
 
-## Implementaciones completadas
+JWT protege operaciones administrativas e internas con roles `ADMIN` y `CUSTOMER`, y las consultas de perfil/préstamos comprueban propiedad. Los valores secretos viven en `.env`; auditoría verificó que el archivo y los secretos locales no están en Git.
 
-- Preparación de datos reproducible, hash, división estratificada 60/20/20, baseline y siete candidatas, métricas y costos ficticios.
-- Tracking de corridas en MLflow, exportación v1/v2 con manifiestos/hash y promoción explícita.
-- API de riesgo en FastAPI y comparación de las 200 solicitudes sin etiqueta. Máximo error absoluto observado `2.22e-16` (tolerancia `1e-9`).
-- Drift PSI descriptivo sobre las solicitudes sin etiqueta; no se registró feature por encima de 0,2.
-- Cache-aside de catálogo con TTL 300 s, invalidación, cotización directa y endpoint de métricas.
-- Persistencia por servicio, outbox de Préstamos/Inventario, idempotencia HTTP por clave, reserva atómica, liberación, expiración, cancelación y entrega.
-- Interfaz de operaciones reales para catálogo, Clientes, solicitudes, inventario y consulta de modelo.
-- Compose, Dockerfiles, README, contratos, diagramas, decisiones y guías.
+## Datos y modelo
 
-## Pruebas y verificaciones
+El histórico contiene 12.000 filas × 15 columnas y SHA-256 `c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd`; las solicitudes nuevas tienen 200 × 14 y no incluyen etiqueta. La auditoría reproducible y el [diccionario de datos](DICCIONARIO_DATOS.md) documentan tipos, rangos, faltantes, duplicados, clase, unidades, IDs y exclusiones.
 
-- `python -m compileall -q domain_service loan_service ml scripts tests`: correcto.
-- `python -m pytest -q`: 7 pasaron. Un aviso de deprecación procede de Starlette/AnyIO.
-- `npm ci && npm run build`: correcto.
-- `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilidades de producción. El audit completo reporta alertas de desarrollo en la dependencia transitoria picomatch de Vite.
-- `docker compose config --quiet`: correcto con `.env` local.
-- `docker compose up --build -d`: correcto; PostgreSQL, Redis, RabbitMQ, MLflow, cuatro APIs y Nginx/frontend levantaron en Docker Desktop.
-- Prueba integrada con servicios reales: alta de cliente, listado y filtro de catálogo, solicitud de préstamo favorable, reserva por RabbitMQ, entrega y transición final a `COMPLETADA`; inventario pasó de 5 a 4 unidades disponibles.
-- Equivalencia contra API del contenedor de Préstamos en las 200 solicitudes: `mismatch_count=0`, error máximo `2.22e-16`.
-- `http://localhost:8080` y el proxy `http://localhost:8080/api/products` respondieron correctamente.
-- Entrenamiento con MLflow Tracking server local: 16 corridas finalizadas y una corrida fallida identificada como `FAILED`.
-- Equivalencia API/pipeline verificada en 200 filas para la API aislada y la ruta de inferencia del servicio de Préstamos (ASGI en proceso, sin DB); drift script ejecutado.
+El pipeline usa partición estratificada 60/20/20 con semilla 42, imputación/codificación/escalado dentro del estimador, baseline y siete candidatas. Selección por Average Precision de validación, desempate por ROC-AUC; el umbral de demostración usa costos ficticios 5:1 en validación. Champion v1 es `logreg_c1`, umbral aproximado 0,305, ROC-AUC test 0,697, AP test 0,532 y Brier test 0,216. La prueba no se usa para seleccionar la segunda versión. v2 se promocionó y se hizo rollback a v1; `/modelo/info` confirmó ambas versiones después de reinicios.
 
-## Ejecución
+La equivalencia local/API en las 200 solicitudes tuvo cero mismatches y error absoluto máximo `2.22e-16` (tolerancia `1e-9`). PSI descriptivo no superó 0,2 en ninguna feature; al no tener etiquetas, no se concluye concept drift ni degradación predictiva. Estos datos y umbrales son sintéticos y no representan política de crédito real.
 
-Después de completar `.env` desde `.env.example`, la instrucción prevista es:
+## Verificaciones recientes
 
-```powershell
-docker compose up --build
-```
+- `pytest -q`: 13 aprobados; incluye roles, ownership, JWT vencido y rechazo de token interno incorrecto.
+- Build frontend TypeScript/Vite correcto.
+- Compose completo healthy; reinicio de PostgreSQL conservó el catálogo y el login ADMIN.
+- Caché: 30 misses p50/p95 4,303/6,290 ms y 200 hits 1,743/2,991 ms. Prueba separada de caída mantuvo respuestas desde PostgreSQL y recuperación miss/hit; snapshots CPU/memoria y límites están en [INFORME_REDIS.md](INFORME_REDIS.md).
+- Casos de aceptación con scripts: sin stock, carrera por la última unidad, idempotencia HTTP/eventos, cotización actualizada, recuperación por caída de broker/consumidor, cancelación/evento tardío/expiración y retry/DLQ.
+- Importación del mismo CSV sintético dos veces: primera inserción, segunda actualización, sin duplicar perfil.
 
-URLs: frontend `http://localhost:8080`; APIs Swagger en `8001`–`8004`; MLflow `http://localhost:5000`; RabbitMQ Management `http://localhost:15672`.
+## Pendientes y límites
 
-## Pendientes y limitaciones
+- Aceptación 14, 15 y 16 requieren comprobar el flujo visual desde frontend, polling de estado, expiración/mensajes y errores de API. El acceso del navegador a `http://localhost:8080` fue denegado por la autorización del origen en esta sesión; se respetó el bloqueo y no se usó una vía alternativa.
+- El grupo debe aportar nombres reales y contribuciones para completar la tabla académica; esos datos no estaban en los archivos disponibles y no se inventaron.
+- Siguen pendientes 30 requisitos de la matriz con implementación sin verificación completa y uno bloqueado. Entre ellos hay persistencia MLflow tras reinicio, validación exhaustiva de errores/API y timeout de una solicitud que permanezca pendiente.
 
-- La topología RabbitMQ incluye reintentos con TTL y DLQ; se comprobó reserva y entrega con el broker real, pero falta forzar fallos para verificar el reintento y DLQ.
-- La prueba integrada cubrió el flujo feliz y el proxy. Falta validar carreras de idempotencia, cancelación/expiración y resiliencia cuando Postgres, Redis o RabbitMQ no estén disponibles.
-- Autenticación/autorización JWT, ownership de préstamos, sesiones y rutas administrativas protegidas pendientes.
-- No hay historial de transiciones separado, migraciones versionadas ni pruebas de aceptación 1–16. Falta auditoría de idempotencia bajo concurrencia real.
-- La UI mantiene las solicitudes de la sesión actual, no hay listado histórico autenticado.
-- El profesor todavía debe completar los integrantes reales en README.
+## Reproducción
 
-## ML y modelo
-
-Dataset SHA-256 `c6cdc437c3aecc9116bc8b978df421d5a7600634c1ad7d6f82e58222a2446ecd`. Modelo v1: regresión logística con AP validación `0.520`, umbral `0.305` y ROC-AUC test `0.697`. Precision clase 1 test `0.345`, recall `0.909`, F1 `0.500`, AP `0.532`, Brier `0.216`. La decisión de umbral usa costos exclusivamente ficticios (5 falso aprobado, 1 falso rechazo). No es una política aplicable a crédito real.
-
-## Próximas tareas
-
-1. Activar Docker Engine y corregir cualquier error de build o integración.
-2. Verificar flujo de préstamo, reservas concurrentes, duplicados, cancelación/evento tardío y vencimiento.
-3. Proteger APIs con roles y añadir listados históricos propios.
-4. Ejecutar las 16 pruebas de aceptación, caída de Redis/RabbitMQ y métricas p50/p95 reales.
-5. Probar DLQ/retry, rollback cargando de nuevo Préstamos, y frontend de errores/sesión.
-6. Confirmar nombres de integrantes, completar la decisión del broker a 1–2 páginas y actualizar este informe.
+Consulta [README.md](../README.md), [GUIA_DEMO.md](GUIA_DEMO.md) y [testing.md](testing.md). Para la matriz completa, criterios exactos y resultados por caso, usa [MATRIZ_CUMPLIMIENTO.md](MATRIZ_CUMPLIMIENTO.md) y [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md).

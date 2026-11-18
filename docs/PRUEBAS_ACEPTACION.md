@@ -6,17 +6,20 @@ Fuente de los casos: sección 12 del enunciado del profesor. El estado refleja e
 
 | Verificación | Resultado | Evidencia |
 |---|---|---|
+| Seguridad de sesión/token | Correcto | JWT vencido rechazado por ruta protegida (401); token interno incorrecto rechazado (401); tests existentes verifican rol y ownership. Auditoría confirmó `.env` fuera del historial Git y valores locales ausentes de archivos tracked. |
 | Aislamiento PostgreSQL | Correcto | `has_database_privilege` comprobó CONNECT propio en cada una de las cuatro bases y denegó los 12 pares rol/base cruzados. Se revocó CONNECT de PUBLIC y se agregó al init para clústeres nuevos. |
 | Persistencia PostgreSQL | Parcialmente correcto | `docker compose restart postgres` preservó el producto demo; GET del catálogo y login ADMIN respondieron 200 tras reinicio. Falta reiniciar/auditar persistencia RabbitMQ y MLflow independientemente. |
-| `python -m pytest -q` | 11 passed, 1 aviso deprecado | Unitarias/ASGI: hashes y JWT, autorización básica, aislamiento de solicitudes por propietario, pipeline de riesgo. |
+| `python -m pytest -q` | 13 passed, 1 aviso deprecado | Unitarias/ASGI: hashes y JWT, autorización básica, aislamiento de solicitudes por propietario, pipeline de riesgo. |
 | `npm --prefix frontend run build` | Correcto | TypeScript y Vite produjeron bundle. |
 | `python ml/equivalence.py` | Correcto | 200 solicitudes, mismatch 0, error absoluto máximo `2.220446049250313e-16`, tolerancia `1e-9`, modelo `v1`. |
+| `python ml/audit_data.py` | Correcto | Auditoría reproducible de histórico (12.000 × 15) y solicitudes (200 × 14), sin filas duplicadas; SHA-256 en `artifacts/data_audit.json`. |
 | `python scripts/seed_demo.py` | Correcto | Productos 1–3 disponibles; script no resetea stock existente. |
 | `python scripts/acceptance_stock_race.py` | Correcto | Favorable sin stock → `CANCELADA_SIN_STOCK`; carrera por una unidad produjo exactamente una `APROBADA` y una `CANCELADA_SIN_STOCK`, available=0/reserved=1; datos temporales eliminados. Requiere que exista un préstamo `COMPLETADA` sintético para reutilizar su perfil de riesgo. |
 | `python scripts/acceptance_idempotency.py` | Correcto | Mismo HTTP key/body devolvió igual ID; body cambiado dio 409; republicar comando y evento mantuvo una reserva, un movimiento y un evento. Limpieza temporal incluida; requiere préstamo `COMPLETADA` sintético. |
 | `python scripts/acceptance_price.py` | Correcto | Cache caliente, actualización a versión 2, GET/cotización nueva y préstamo APROBADA con precio/versión 2 persistidos; datos temporales eliminados. Requiere préstamo `COMPLETADA` sintético. |
 | `python scripts/acceptance_recovery.py` | Correcto | Broker detenido durante escritura y consumer Inventario detenido durante publicación; ambas solicitudes quedaron pendientes y luego APROBADA, una reserva por cada una, limpieza temporal. |
 | `python scripts/acceptance_cancel_late.py` | Correcto | Cancelación devolvió stock y evento tardío dejó estado terminal; reserva expirada terminó EXPIRED, préstamo CANCELADA y stock liberado. |
+| `python scripts/acceptance_retry_dlq.py` | Correcto | Un comando provocó fallo de constraint dentro de la transacción: tres reintentos, DLQ con `attempts=3`, sin cambio de stock/movimientos/outbox; probe retirado del DLQ. |
 | Redis miss/hit en Docker | Correcto | Clave del producto 1 eliminada y consultada dos veces: hits 1, misses 1, fallbacks 0; hit rate 0.5; p50/p95 observados 0.269 ms en esa corrida. Muestra de demo, no benchmark. |
 | Redis expiración, caída y recuperación | Correcto | Se expiró una clave en 1 s y la lectura volvió a PostgreSQL; en la última parada de Redis, tres lecturas dieron 200 en 379.2/5.3/2.9 ms. El contador acumulado de fallback fue 6 en dos corridas de caída. p50=1.541 ms, p95=353.888 ms en la ventana del proceso. Tras restaurar Redis, la siguiente corrida produjo miss y hit. |
 | Promoción y rollback V2/V1 | Correcto | `ml/promote.py v2`, reinicio de Préstamos, `/modelo/info` devolvió v2; rollback a v1, reinicio, `/modelo/info` devolvió v1. Puntero quedó en v1. |
@@ -38,7 +41,7 @@ El acceso de navegador a `http://localhost:8080` fue denegado por la aprobación
 | 8 | Redis vacío, expirado y caído | Aprobado. | Clave vaciada y miss/hit; TTL expirado; Redis detenido con tres respuestas 200 vía DB y fallbacks=3; Redis restaurado y caché retomó miss/hit. El TTL configurado es 300s; la prueba de expiración acortó el TTL de la clave a 1s. |
 | 9 | Cambio de precio invalida cache y préstamo usa nuevo precio | Aprobado. | `acceptance_price.py`: clave caliente, PUT a versión 2, GET y cotización interna nuevos; préstamo aprobado guardó el precio y la versión 2. Limpieza automática. |
 | 10 | Modelo exportado equivalente a API | Aprobado. | Corrida de equivalencia: 200/200, mismatch 0, max error `2.22e-16`, modelo v1. |
-| 11 | Promoción/rollback de modelo | Parcial. | Se comprobó cambio de puntero antes; falta comprobar V2 en API después de reiniciar y rollback a V1 en API. |
+| 11 | Promoción/rollback de modelo | Aprobado. | Se promovió v2, reinició Préstamos y `/modelo/info` informó v2; rollback a v1, reinicio y `/modelo/info` informó v1. Puntero final v1. |
 | 12 | Importar CSV dos veces sin duplicar | Aprobado. | CSV sintético de una fila: primera importación inserted=1/updated=0/rejected=0; segunda inserted=0/updated=1/rejected=0; se confirmó un solo perfil y se eliminó tras la prueba. |
 | 13 | Cliente no ve préstamos ajenos | Aprobado por prueba manual de API previa: dueño 200, ajeno 403; unitarias verifican solicitud ajena 403. | Conservar el resultado reproducible de integración al ejecutar la suite completa. |
 | 14 | Operación del negocio desde frontend | No verificado por navegador. | La aprobación del origen local fue denegada; requiere validación manual de la interfaz en demo. |
