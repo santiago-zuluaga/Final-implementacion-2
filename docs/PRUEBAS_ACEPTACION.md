@@ -6,6 +6,7 @@ Fuente de los casos: sección 12 del enunciado del profesor. El estado refleja e
 
 | Verificación | Resultado | Evidencia |
 |---|---|---|
+| Aislamiento PostgreSQL | Correcto | `has_database_privilege` comprobó CONNECT propio en cada una de las cuatro bases y denegó los 12 pares rol/base cruzados. Se revocó CONNECT de PUBLIC y se agregó al init para clústeres nuevos. |
 | `python -m pytest -q` | 11 passed, 1 aviso deprecado | Unitarias/ASGI: hashes y JWT, autorización básica, aislamiento de solicitudes por propietario, pipeline de riesgo. |
 | `npm --prefix frontend run build` | Correcto | TypeScript y Vite produjeron bundle. |
 | `python ml/equivalence.py` | Correcto | 200 solicitudes, mismatch 0, error absoluto máximo `2.220446049250313e-16`, tolerancia `1e-9`, modelo `v1`. |

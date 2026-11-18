@@ -19,6 +19,7 @@ Revisión: 18 de noviembre de 2026. La matriz detallada es [MATRIZ_CUMPLIMIENTO.
 ## Verificado con evidencia disponible
 
 - Compose completo arranca; PostgreSQL, Redis, RabbitMQ y cuatro APIs healthy. Frontend y MLflow están ejecutándose.
+- PostgreSQL: cada rol de dominio conecta a su base y no tiene CONNECT a las otras tres; `PUBLIC` fue revocado en bases existentes y el script de init aplica la restricción en nuevas instalaciones.
 - Flujo de negocio integrado probado previamente: riesgo favorable, reserva en RabbitMQ/Inventario y entrega produjeron estado `COMPLETADA`; disponibilidad bajó en una unidad.
 - Autorización integrada comprobada previamente: login ADMIN, cliente registrado, perfil propio 200, recurso ajeno 403, acción administrativa desde CUSTOMER 403, token inválido 401. Préstamo propio 200 y ajeno 403.
 - Idempotencia HTTP comprobada previamente: mismo cuerpo/clave devolvió el mismo ID; mismo key con cuerpo distinto dio 409.

@@ -5,6 +5,7 @@ Registro conciso de verificaciones reproducibles del stack local. No incluye cre
 ## 2026-11-18
 
 - `docker compose ps`: PostgreSQL, Redis, RabbitMQ y cuatro APIs healthy; frontend y MLflow en ejecución.
+- Aislamiento PostgreSQL: se revocó CONNECT de PUBLIC para las cuatro bases; consulta de `has_database_privilege` mostró permiso solo para cada pareja rol/base propia (12 pares cruzados denegados). Las cuatro APIs respondieron health `ok` después del cambio.
 - `python -m pytest -q`: 11 passed; un `DeprecationWarning` de Starlette/AnyIO.
 - `npm --prefix frontend run build`: TypeScript y Vite exitosos.
 - `python ml/equivalence.py`: 200 filas; mismatches 0; max error `2.220446049250313e-16`; modelo v1.
