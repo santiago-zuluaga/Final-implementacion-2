@@ -23,6 +23,8 @@ Con el mismo fixture COMPLETADA, `.venv\Scripts\python.exe scripts\acceptance_id
 
 `.venv\Scripts\python.exe scripts\acceptance_price.py` verifica invalidación de cache y que el préstamo persiste el precio/versión actualizados. También requiere el fixture COMPLETADA y limpia los registros temporales.
 
+`.venv\Scripts\python.exe scripts\acceptance_recovery.py` detiene RabbitMQ y luego el consumidor Inventario en escenarios separados; valida que outbox/cola durable recuperen ambas solicitudes. Restaura ambos servicios y limpia los datos temporales.
+
 ## Evidencia actual
 
 El registro fechado, con cantidades y limitaciones, está en [EXECUTION_LOG.md](EXECUTION_LOG.md); los 16 casos académicos y su estado están en [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md). En la corrida local del 18-11-2026, pytest dio 11 passed, build web pasó, equivalencia fue 200/200 con error máximo `2.22e-16`, y la caché produjo una muestra miss/hit. Aún faltan pruebas automatizadas de concurrencia, caída de dependencias, retries/DLQ y flujo visual real.
