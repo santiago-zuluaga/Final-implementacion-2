@@ -1,7 +1,7 @@
 """Four independently deployed CrediMarket APIs, selected by SERVICE."""
 from __future__ import annotations
 import asyncio, csv, hashlib, hmac, io, json, os, uuid
-import statistics, time
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +26,11 @@ RABBIT=os.getenv('RABBIT_URL','amqp://guest:guest@rabbitmq:5672/')
 INTERNAL_API_TOKEN=os.getenv('INTERNAL_API_TOKEN','')
 ROOT=Path(__file__).resolve().parents[1]
 CACHE_METRICS={'hits':0,'misses':0,'fallbacks':0,'durations_ms':[]}
+CACHE_DOWN_UNTIL=0.0
+def record_cache_duration(started):
+    values=CACHE_METRICS['durations_ms']
+    values.append((time.perf_counter()-started)*1000)
+    if len(values)>500: del values[:-500]
 
 SCHEMAS={
 'products':'''CREATE TABLE IF NOT EXISTS products(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,category TEXT NOT NULL,price_cop BIGINT NOT NULL CHECK(price_cop>0),version INT NOT NULL DEFAULT 1,active BOOLEAN NOT NULL DEFAULT TRUE,updated_at TIMESTAMPTZ NOT NULL DEFAULT now());''',
@@ -290,36 +295,48 @@ def product_list(q:str|None=None):
         params['like']=f'%{q}%'
     with engine.connect() as c: rows=c.execute(text(query+' ORDER BY id'),params).mappings().all()
     return [dict(r) for r in rows]
-def get_product(id,quotation=False):
+async def get_product(id,quotation=False):
+    global CACHE_DOWN_UNTIL
     require('products'); key=f'products:v1:{id}'
     started=time.perf_counter()
     if not quotation:
-      try:
-        hit=cache.get(key) if cache else None
-        if hit:
-          CACHE_METRICS['hits']+=1; CACHE_METRICS['durations_ms'].append((time.perf_counter()-started)*1000); return json.loads(hit)
-        CACHE_METRICS['misses']+=1
-      except Exception: CACHE_METRICS['fallbacks']+=1; CACHE_METRICS['misses']+=1
+      if cache and time.monotonic()>=CACHE_DOWN_UNTIL:
+        try:
+          hit=await asyncio.wait_for(asyncio.to_thread(cache.get,key),timeout=.35)
+          CACHE_DOWN_UNTIL=0.0
+          if hit:
+            CACHE_METRICS['hits']+=1; record_cache_duration(started); return json.loads(hit)
+          CACHE_METRICS['misses']+=1
+        except Exception:
+          CACHE_DOWN_UNTIL=time.monotonic()+5.0
+          CACHE_METRICS['fallbacks']+=1; CACHE_METRICS['misses']+=1
+      else:
+        CACHE_METRICS['fallbacks']+=1; CACHE_METRICS['misses']+=1
     with engine.connect() as c: row=c.execute(text('SELECT * FROM products WHERE id=:id AND active'),{'id':id}).mappings().first()
     if not row: raise HTTPException(404,'Product not found')
     out=dict(row)
     if not quotation:
-      try:
-        if cache: cache.setex(key,300,json.dumps(out,default=str))
-      except Exception: pass
-      CACHE_METRICS['durations_ms'].append((time.perf_counter()-started)*1000)
+      if cache and time.monotonic()>=CACHE_DOWN_UNTIL:
+        try: await asyncio.wait_for(asyncio.to_thread(cache.setex,key,300,json.dumps(out,default=str)),timeout=.35)
+        except Exception:
+          CACHE_DOWN_UNTIL=time.monotonic()+5.0
+          CACHE_METRICS['fallbacks']+=1
+      record_cache_duration(started)
     return out
 @app.get('/cache/metrics')
 def cache_metrics(authorization:str|None=Header(None)):
     require('products'); require_role(authorization,'ADMIN'); durations=CACHE_METRICS['durations_ms'][-500:]
-    def percentile(p): return round(sorted(durations)[min(len(durations)-1,int((len(durations)-1)*p))] if durations else 0,3)
+    def percentile(p):
+      if not durations: return 0
+      ordered=sorted(durations); position=(len(ordered)-1)*p; lower=int(position); upper=min(lower+1,len(ordered)-1)
+      return round(ordered[lower]+(ordered[upper]-ordered[lower])*(position-lower),3)
     total=CACHE_METRICS['hits']+CACHE_METRICS['misses']
     return {**{k:v for k,v in CACHE_METRICS.items() if k!='durations_ms'},'hit_rate':CACHE_METRICS['hits']/total if total else 0,'p50_ms':percentile(.50),'p95_ms':percentile(.95)}
 @app.get('/products/{id}')
-def product_get(id:int): return get_product(id)
+async def product_get(id:int): return await get_product(id)
 @app.get('/products/{id}/quotation')
-def quotation(id:int,x_internal_token:str|None=Header(None,alias='X-Internal-Token')):
-    require('products'); require_internal(x_internal_token); return get_product(id,True)
+async def quotation(id:int,x_internal_token:str|None=Header(None,alias='X-Internal-Token')):
+    require('products'); require_internal(x_internal_token); return await get_product(id,True)
 @app.put('/products/{id}')
 def product_update(id:int,body:ProductIn,authorization:str|None=Header(None)):
     require('products'); require_role(authorization,'ADMIN')
