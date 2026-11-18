@@ -17,6 +17,8 @@ python ml/drift.py
 
 Con el stack activo, las APIs corren en puertos 8001–8004, Nginx en 8080, MLflow en 5000 y RabbitMQ Management en 15672. No ejecutar `down -v` al verificar persistencia.
 
+Después de completar al menos un préstamo de demo y confirmarlo entregado, puede repetirse la prueba temporal de stock con `.venv\Scripts\python.exe scripts\acceptance_stock_race.py`. El script verifica sin stock y la carrera por la última unidad; elimina los datos que crea al finalizar.
+
 ## Evidencia actual
 
 El registro fechado, con cantidades y limitaciones, está en [EXECUTION_LOG.md](EXECUTION_LOG.md); los 16 casos académicos y su estado están en [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md). En la corrida local del 18-11-2026, pytest dio 11 passed, build web pasó, equivalencia fue 200/200 con error máximo `2.22e-16`, y la caché produjo una muestra miss/hit. Aún faltan pruebas automatizadas de concurrencia, caída de dependencias, retries/DLQ y flujo visual real.
