@@ -21,20 +21,23 @@ Fecha de revisión: 18 de noviembre de 2026.
 - Compose describe PostgreSQL (cuatro bases/roles), RabbitMQ, Redis, MLflow y cuatro APIs más Nginx/React.
 - `python -m compileall -q domain_service loan_service ml tests`: correcto.
 - `python -m pytest -q`: 7 passed (un aviso de deprecación en Starlette/AnyIO).
-- `npm run build`: correcto.
+- `npm ci && npm run build`: correcto en Windows y en `node:24-slim` (Debian) durante la construcción de Docker. `node:24-alpine` fallaba al procesar `react-dom/client.js`; se fijó el stage de build a Debian slim.
 - `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilidades de producción.
-- `docker compose config --quiet`: correcto con `.env` local.
+- `docker compose config --quiet`: correcto con `.env` local. `docker compose up --build -d` construyó y levantó todos los servicios.
 
-## Implementado pero no integrado/verificado en Docker
+## Integración verificada en Docker
 
-El daemon de Docker Desktop no estaba activo (no existe el pipe del motor Linux). Por ello no se construyeron imágenes ni se levantaron contenedores. Las APIs de dominio solo tienen compilación estática, pruebas de esquema/inferencia y revisión de código, no prueba integrada con PostgreSQL, Redis o RabbitMQ. MLflow sí se verificó localmente con servidor y dieciséis corridas finalizadas.
+- Docker Desktop está activo. PostgreSQL, Redis, RabbitMQ y las cuatro APIs reportaron estado saludable; MLflow y frontend/Nginx quedaron ejecutándose.
+- El flujo probado en contenedores incluyó alta de cliente, catálogo/consulta, evaluación de riesgo, evento de reserva, entrega y estado final `COMPLETADA`; el inventario disminuyó de 5 a 4 unidades disponibles.
+- Equivalencia contra el endpoint del servicio de Préstamos con las 200 solicitudes: cero diferencias por encima de tolerancia (`2.22e-16` de máximo error absoluto).
+- Nginx sirvió la interfaz en `http://localhost:8080` y el proxy `/api/products`.
+- Se corrigió el filtro opcional de Productos: PostgreSQL rechazaba comparar un parámetro nulo sin tipo. La consulta solo añade `ILIKE` cuando se recibe `q`.
 
-La API aislada `loan_service.app` y la ruta de inferencia de `domain_service.app` se compararon con el artefacto en 200 filas (para el segundo caso se usó ASGI en proceso, sin ejecutar su startup de DB). Falta repetir la equivalencia contra el contenedor Compose con el stack levantado.
+La ruta del flujo feliz está comprobada; faltan pruebas de fallos de broker para retries/DLQ, carrera de idempotencia, cancelación/expiración y dependencias no disponibles.
 
 ## Pendiente obligatorio o de alto impacto
 
-- Iniciar Docker y ejecutar Compose completo; corregir fallos de build, SQL, broker y proxy que aparezcan.
-- Reintentos limitados (3, con cola TTL de 5 segundos) y dead letter queue implementados en la topología de consumidores RabbitMQ; falta probarlos con el broker real.
+- Reintentos limitados (3, con cola TTL de 5 segundos) y dead letter queue implementados; falta forzar errores y confirmar los reintentos con el broker real.
 - Seguridad/autorización (JWT o equivalente), cuentas, sesión expirada y restricción de préstamos ajenos. La autenticación es opcional en la descripción, pero la rúbrica exige roles para aspirar al mejor nivel.
 - Vistas persistentes de préstamos propias (la UI conserva solicitudes de la sesión actual); controles completos de búsqueda y detalle.
 - Idempotencia HTTP bajo carreras concurrentes debe validarse con PostgreSQL; errores de API y contraejemplos de mensajes deben probarse.

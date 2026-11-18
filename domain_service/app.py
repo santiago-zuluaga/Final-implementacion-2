@@ -213,7 +213,12 @@ def product_create(body:ProductIn):
 @app.get('/products')
 def product_list(q:str|None=None):
     require('products')
-    with engine.connect() as c: rows=c.execute(text('SELECT * FROM products WHERE active AND (:q IS NULL OR name ILIKE :like) ORDER BY id'),{'q':q,'like':f'%{q}%' if q else None}).mappings().all()
+    query='SELECT * FROM products WHERE active'
+    params={}
+    if q:
+        query+=' AND name ILIKE :like'
+        params['like']=f'%{q}%'
+    with engine.connect() as c: rows=c.execute(text(query+' ORDER BY id'),params).mappings().all()
     return [dict(r) for r in rows]
 def get_product(id,quotation=False):
     require('products'); key=f'products:v1:{id}'

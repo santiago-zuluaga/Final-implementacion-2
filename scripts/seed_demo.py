@@ -16,6 +16,6 @@ def main():
       stock=requests.get(INVENTORY+'/inventory',timeout=5); stock.raise_for_status()
       if not any(s['product_id']==product['id'] for s in stock.json()):
         response=requests.post(INVENTORY+'/inventory/stock',json={'product_id':product['id'],'quantity':5},timeout=5); response.raise_for_status()
-      print(f"{product['name']} (id={product['id']}) → 5 unidades iniciales si no existían")
+      print(f"{product['name']} (id={product['id']}) - 5 unidades iniciales si no existian")
 
 if __name__=='__main__': main()

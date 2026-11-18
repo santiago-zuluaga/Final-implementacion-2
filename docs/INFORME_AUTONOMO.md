@@ -4,7 +4,7 @@ Fecha: 18 de noviembre de 2026.
 
 ## Resumen
 
-Se avanzó desde un repositorio vacío hasta una primera implementación del ciclo ML, cuatro APIs de dominio independientes, interfaz React y configuración de despliegue. El enunciado original está en `docs/Enunciado_CrediMarket.docx`. El primer commit se publicó en GitHub; se publicarán avances adicionales una vez verificados.
+Se avanzó desde un repositorio vacío hasta una primera implementación del ciclo ML, cuatro APIs de dominio independientes, interfaz React y configuración de despliegue. El enunciado original está en `docs/Enunciado_CrediMarket.docx`. Los avances se publican en GitHub por hitos.
 
 ## Arquitectura
 
@@ -28,6 +28,10 @@ Productos, Clientes, Préstamos e Inventario son procesos FastAPI separados, con
 - `npm ci && npm run build`: correcto.
 - `npm audit --omit=dev --audit-level=moderate`: 0 vulnerabilidades de producción. El audit completo reporta alertas de desarrollo en la dependencia transitoria picomatch de Vite.
 - `docker compose config --quiet`: correcto con `.env` local.
+- `docker compose up --build -d`: correcto; PostgreSQL, Redis, RabbitMQ, MLflow, cuatro APIs y Nginx/frontend levantaron en Docker Desktop.
+- Prueba integrada con servicios reales: alta de cliente, listado y filtro de catálogo, solicitud de préstamo favorable, reserva por RabbitMQ, entrega y transición final a `COMPLETADA`; inventario pasó de 5 a 4 unidades disponibles.
+- Equivalencia contra API del contenedor de Préstamos en las 200 solicitudes: `mismatch_count=0`, error máximo `2.22e-16`.
+- `http://localhost:8080` y el proxy `http://localhost:8080/api/products` respondieron correctamente.
 - Entrenamiento con MLflow Tracking server local: 16 corridas finalizadas y una corrida fallida identificada como `FAILED`.
 - Equivalencia API/pipeline verificada en 200 filas para la API aislada y la ruta de inferencia del servicio de Préstamos (ASGI en proceso, sin DB); drift script ejecutado.
 
@@ -43,9 +47,8 @@ URLs: frontend `http://localhost:8080`; APIs Swagger en `8001`–`8004`; MLflow 
 
 ## Pendientes y limitaciones
 
-- Docker Engine no estaba activo/disponible, por lo que no se construyeron imágenes ni se levantó PostgreSQL, RabbitMQ, Redis, MLflow en Compose o frontend en contenedor.
-- La topología RabbitMQ incluye reintentos con TTL y DLQ, pero no ha sido probada con el broker real.
-- El stack compuesto de servicios no se probó con DB/broker/cache. La equivalencia de `domain_service.app` se hizo localmente sin ejecutar el startup de DB; falta repetirla dentro del contenedor Compose.
+- La topología RabbitMQ incluye reintentos con TTL y DLQ; se comprobó reserva y entrega con el broker real, pero falta forzar fallos para verificar el reintento y DLQ.
+- La prueba integrada cubrió el flujo feliz y el proxy. Falta validar carreras de idempotencia, cancelación/expiración y resiliencia cuando Postgres, Redis o RabbitMQ no estén disponibles.
 - Autenticación/autorización JWT, ownership de préstamos, sesiones y rutas administrativas protegidas pendientes.
 - No hay historial de transiciones separado, migraciones versionadas ni pruebas de aceptación 1–16. Falta auditoría de idempotencia bajo concurrencia real.
 - La UI mantiene las solicitudes de la sesión actual, no hay listado histórico autenticado.
