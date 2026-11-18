@@ -21,6 +21,8 @@ Después de completar al menos un préstamo de demo y confirmarlo entregado, pue
 
 Con el mismo fixture COMPLETADA, `.venv\Scripts\python.exe scripts\acceptance_idempotency.py` prueba reintento HTTP, conflicto por cuerpo distinto y republicación de comando/evento RabbitMQ. Limpia los préstamos, stock, producto y movimientos temporales al finalizar.
 
+`.venv\Scripts\python.exe scripts\acceptance_price.py` verifica invalidación de cache y que el préstamo persiste el precio/versión actualizados. También requiere el fixture COMPLETADA y limpia los registros temporales.
+
 ## Evidencia actual
 
 El registro fechado, con cantidades y limitaciones, está en [EXECUTION_LOG.md](EXECUTION_LOG.md); los 16 casos académicos y su estado están en [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md). En la corrida local del 18-11-2026, pytest dio 11 passed, build web pasó, equivalencia fue 200/200 con error máximo `2.22e-16`, y la caché produjo una muestra miss/hit. Aún faltan pruebas automatizadas de concurrencia, caída de dependencias, retries/DLQ y flujo visual real.
