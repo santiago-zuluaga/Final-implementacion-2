@@ -52,10 +52,9 @@ def test_risk_api_matches_pipeline_with_missing_employment():
     assert response.json()['model_version']=='v1'
 
 def test_domain_openapi_exposes_required_routes():
-    from domain_service.app import app
-    paths=app.openapi()['paths']
-    for path in ['/products','/products/{id}/quotation','/customers/import','/inventory','/inventory/stock','/prestamos','/prestamos/{id}','/riesgo/predict','/modelo/info','/health','/ready']:
-        assert path in paths
+    from domain_service import app as service
+    paths=service.build_service_openapi('products')['paths']
+    assert set(paths)=={'/health','/ready','/products','/products/{id}','/products/{id}/quotation','/products/{id}/deactivate','/products/{id}/activate','/cache/metrics'}
 
 def test_domain_loan_service_predictions_match_artifact_for_all_unlabeled_rows(monkeypatch):
     import asyncio, httpx, numpy as np

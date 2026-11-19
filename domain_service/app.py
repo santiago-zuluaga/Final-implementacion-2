@@ -10,7 +10,9 @@ import httpx
 import joblib
 import pandas as pd
 import redis
-from fastapi import FastAPI, Header, HTTPException, UploadFile, File, Response
+from fastapi import FastAPI, Header, HTTPException, UploadFile, File, Response, Query
+from fastapi.routing import APIRoute
+from fastapi.openapi.utils import get_openapi
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Literal
 from sqlalchemy import create_engine, text
@@ -38,10 +40,40 @@ SCHEMAS={
 'inventory':'''CREATE TABLE IF NOT EXISTS stock(product_id BIGINT PRIMARY KEY,available INT NOT NULL CHECK(available>=0),reserved INT NOT NULL DEFAULT 0 CHECK(reserved>=0)); CREATE TABLE IF NOT EXISTS reservations(loan_id TEXT PRIMARY KEY,product_id BIGINT NOT NULL,quantity INT NOT NULL,status TEXT NOT NULL,expires_at TIMESTAMPTZ NOT NULL DEFAULT now()+interval '30 minutes'); CREATE TABLE IF NOT EXISTS movements(id BIGSERIAL PRIMARY KEY,product_id BIGINT,loan_id TEXT,kind TEXT,quantity INT,created_at TIMESTAMPTZ DEFAULT now()); CREATE TABLE IF NOT EXISTS processed_messages(event_id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS outbox(event_id TEXT PRIMARY KEY,type TEXT NOT NULL,correlation_id TEXT NOT NULL,loan_id TEXT NOT NULL,payload JSONB NOT NULL,created_at TIMESTAMPTZ DEFAULT now(),published_at TIMESTAMPTZ);''',
 'loans':'''CREATE TABLE IF NOT EXISTS loans(id TEXT PRIMARY KEY,customer_id TEXT NOT NULL,product_id BIGINT NOT NULL,quantity INT NOT NULL,term_months INT NOT NULL,price_cop BIGINT NOT NULL,product_version INT NOT NULL,probability DOUBLE PRECISION NOT NULL,threshold DOUBLE PRECISION NOT NULL,model_version TEXT NOT NULL,status TEXT NOT NULL,reason TEXT,created_at TIMESTAMPTZ NOT NULL DEFAULT now()); CREATE TABLE IF NOT EXISTS idempotency(key TEXT PRIMARY KEY,request_hash TEXT NOT NULL,loan_id TEXT NOT NULL); CREATE TABLE IF NOT EXISTS outbox(event_id TEXT PRIMARY KEY,type TEXT NOT NULL,correlation_id TEXT NOT NULL,loan_id TEXT NOT NULL,payload JSONB NOT NULL,created_at TIMESTAMPTZ DEFAULT now(),published_at TIMESTAMPTZ); CREATE TABLE IF NOT EXISTS processed_messages(event_id TEXT PRIMARY KEY);'''}
 
+# Database-level guards for domain invariants that were previously enforced only
+# by API validation and transactional state transitions. Named constraints are
+# also installed on already-created databases by ensure_constraints().
+DB_CONSTRAINTS={
+  'loans': {
+    'loans_quantity_positive': ('loans','quantity > 0'),
+    'loans_term_months_valid': ('loans','term_months BETWEEN 1 AND 60'),
+    'loans_price_positive': ('loans','price_cop > 0'),
+    'loans_probability_valid': ('loans','probability BETWEEN 0 AND 1'),
+    'loans_threshold_valid': ('loans','threshold BETWEEN 0 AND 1'),
+    'loans_status_valid': ('loans',"status IN ('PENDIENTE_INVENTARIO','APROBADA','RECHAZADA','CANCELADA_SIN_STOCK','CANCELACION_PENDIENTE','CANCELADA','COMPLETADA')"),
+    'idempotency_key_nonempty': ('idempotency',"key <> ''"),
+    'idempotency_hash_sha256': ('idempotency',"request_hash ~ '^[a-f0-9]{64}$'"),
+    'idempotency_loan_nonempty': ('idempotency',"loan_id <> ''"),
+  },
+  'inventory': {
+    'reservations_quantity_positive': ('reservations','quantity > 0'),
+    'reservations_status_valid': ('reservations',"status IN ('RESERVED','RELEASED','DELIVERED','EXPIRED')"),
+    'movements_quantity_positive': ('movements','quantity > 0'),
+    'movements_kind_valid': ('movements',"kind IN ('IN','OUT','RESERVE','RELEASE','EXPIRE')"),
+  },
+}
+
+def ensure_constraints(connection):
+    for name,(table,expression) in DB_CONSTRAINTS.get(SERVICE,{}).items():
+      exists=connection.execute(text('SELECT 1 FROM pg_constraint WHERE conname=:name AND conrelid=CAST(:table AS regclass)'),{'name':name,'table':table}).first()
+      if not exists:
+        connection.execute(text(f'ALTER TABLE {table} ADD CONSTRAINT {name} CHECK ({expression})'))
+
 def init_db():
     with engine.begin() as c:
         for ddl in SCHEMAS[SERVICE].split(';'):
             if ddl.strip(): c.execute(text(ddl))
+        ensure_constraints(c)
     if SERVICE=='customers': ensure_demo_admin()
 
 def ensure_demo_admin():
@@ -122,6 +154,31 @@ async def event_consumer(app):
       except asyncio.CancelledError: raise
       except Exception as e: print(f'event consumer reconnect: {e}',flush=True); await asyncio.sleep(2)
 
+def handle_inventory_command(d):
+    payload=d['payload']; loan=d['prestamo_id']; is_release=d['type']=='LiberarReserva'
+    product=int(payload.get('producto_id',0)); qty=int(payload.get('cantidad',0))
+    with engine.begin() as c:
+      first=c.execute(text('INSERT INTO processed_messages(event_id) VALUES(:e) ON CONFLICT(event_id) DO NOTHING RETURNING event_id'),{'e':d['event_id']}).first()
+      if not first: return False
+      old=c.execute(text('SELECT status FROM reservations WHERE loan_id=:id FOR UPDATE'),{'id':loan}).first()
+      if is_release:
+        if old and old[0]=='RESERVED':
+          r=c.execute(text("UPDATE reservations SET status='RELEASED' WHERE loan_id=:id RETURNING product_id,quantity"),{'id':loan}).mappings().one()
+          c.execute(text('UPDATE stock SET available=available+:q,reserved=reserved-:q WHERE product_id=:p'),{'q':r['quantity'],'p':r['product_id']}); c.execute(text("INSERT INTO movements(product_id,loan_id,kind,quantity) VALUES(:p,:id,'RELEASE',:q)"),{'p':r['product_id'],'id':loan,'q':r['quantity']})
+        elif not old:
+          c.execute(text("INSERT INTO reservations(loan_id,product_id,quantity,status) VALUES(:id,:p,:q,'RELEASED')"),{'id':loan,'p':product,'q':max(qty,1)})
+        success=True
+      elif old: success=old[0]=='RESERVED'
+      else:
+        updated=c.execute(text('UPDATE stock SET available=available-:q,reserved=reserved+:q WHERE product_id=:p AND available>=:q RETURNING product_id'),{'q':qty,'p':product}).first()
+        success=bool(updated)
+        if success:
+          c.execute(text("INSERT INTO reservations(loan_id,product_id,quantity,status) VALUES(:id,:p,:q,'RESERVED')"),{'id':loan,'p':product,'q':qty}); c.execute(text("INSERT INTO movements(product_id,loan_id,kind,quantity) VALUES(:p,:id,'RESERVE',:q)"),{'p':product,'id':loan,'q':qty})
+      kind=('ReservaLiberada' if is_release else 'InventarioReservado' if success else 'InventarioInsuficiente')
+      event_id=str(uuid.uuid5(uuid.NAMESPACE_URL,d['event_id']+kind))
+      c.execute(text('INSERT INTO outbox(event_id,type,correlation_id,loan_id,payload) VALUES(:e,:t,:c,:id,CAST(:payload AS JSONB)) ON CONFLICT(event_id) DO NOTHING'),{'e':event_id,'t':kind,'c':d['correlation_id'],'id':loan,'payload':json.dumps({'producto_id':product,'cantidad':qty})})
+    return True
+
 async def inventory_consumer():
     while True:
       try:
@@ -142,25 +199,7 @@ async def inventory_consumer():
                 attempts=sum(int(entry.get('count',0)) for entry in (msg.headers or {}).get('x-death',[]) if entry.get('queue')=='inventory.commands.retry')
                 if attempts>=3:
                   await dlx.publish(aio_pika.Message(msg.body,delivery_mode=aio_pika.DeliveryMode.PERSISTENT,headers={'failure':'retry limit exceeded','attempts':attempts}),routing_key='inventory.commands.failed'); continue
-                d=json.loads(msg.body); payload=d['payload']; loan=d['prestamo_id']; is_release=d['type']=='LiberarReserva'; product=int(payload.get('producto_id',0)); qty=int(payload.get('cantidad',0))
-                with engine.begin() as c:
-                  old=c.execute(text('SELECT status FROM reservations WHERE loan_id=:id FOR UPDATE'),{'id':loan}).first()
-                  if is_release:
-                    if old and old[0]=='RESERVED':
-                      r=c.execute(text("UPDATE reservations SET status='RELEASED' WHERE loan_id=:id RETURNING product_id,quantity"),{'id':loan}).mappings().one()
-                      c.execute(text('UPDATE stock SET available=available+:q,reserved=reserved-:q WHERE product_id=:p'),{'q':r['quantity'],'p':r['product_id']}); c.execute(text("INSERT INTO movements(product_id,loan_id,kind,quantity) VALUES(:p,:id,'RELEASE',:q)"),{'p':r['product_id'],'id':loan,'q':r['quantity']})
-                    elif not old:
-                      c.execute(text("INSERT INTO reservations(loan_id,product_id,quantity,status) VALUES(:id,:p,:q,'RELEASED')"),{'id':loan,'p':product,'q':max(qty,1)})
-                    success=True
-                  elif old: success=old[0]=='RESERVED'
-                  else:
-                    updated=c.execute(text('UPDATE stock SET available=available-:q,reserved=reserved+:q WHERE product_id=:p AND available>=:q RETURNING product_id'),{'q':qty,'p':product}).first()
-                    success=bool(updated)
-                    if success:
-                      c.execute(text("INSERT INTO reservations(loan_id,product_id,quantity,status) VALUES(:id,:p,:q,'RESERVED')"),{'id':loan,'p':product,'q':qty}); c.execute(text("INSERT INTO movements(product_id,loan_id,kind,quantity) VALUES(:p,:id,'RESERVE',:q)"),{'p':product,'id':loan,'q':qty})
-                  kind=('ReservaLiberada' if is_release else 'InventarioReservado' if success else 'InventarioInsuficiente')
-                  event_id=str(uuid.uuid5(uuid.NAMESPACE_URL,d['event_id']+kind))
-                  c.execute(text('INSERT INTO outbox(event_id,type,correlation_id,loan_id,payload) VALUES(:e,:t,:c,:id,CAST(:payload AS JSONB)) ON CONFLICT(event_id) DO NOTHING'),{'e':event_id,'t':kind,'c':d['correlation_id'],'id':loan,'payload':json.dumps({'producto_id':product,'cantidad':qty})})
+                d=json.loads(msg.body); handle_inventory_command(d)
       except asyncio.CancelledError: raise
       except Exception as e: print(f'inventory consumer reconnect: {e}',flush=True); await asyncio.sleep(2)
 
@@ -244,7 +283,10 @@ class StockIn(BaseModel): product_id:int=Field(gt=0); quantity:int=Field(gt=0)
 def health(): return {'status':'ok','service':SERVICE}
 @app.get('/ready')
 def ready():
-    with engine.connect() as c: c.execute(text('SELECT 1'))
+    try:
+      with engine.connect() as c: c.execute(text('SELECT 1'))
+    except Exception:
+      raise HTTPException(503,'Database unavailable')
     if SERVICE=='loans' and app.state.model is None: raise HTTPException(503,'No promoted model')
     return {'status':'ready'}
 
@@ -274,6 +316,7 @@ def auth_login(body:AuthLogin):
 
 @app.get('/auth/me')
 def auth_me(authorization:str|None=Header(None)):
+    require('customers')
     actor=current_actor(authorization)
     return {'username':actor['sub'],'role':actor['role'],'customer_id':actor.get('customer_id')}
 
@@ -286,20 +329,21 @@ def product_create(body:ProductIn,authorization:str|None=Header(None)):
     with engine.begin() as c: row=c.execute(text('INSERT INTO products(name,category,price_cop) VALUES(:n,:cat,:p) RETURNING *'),{'n':body.name,'cat':body.category,'p':body.price_cop}).mappings().one()
     return dict(row)
 @app.get('/products')
-def product_list(q:str|None=None):
+def product_list(q:str|None=None,include_inactive:bool=False,authorization:str|None=Header(None)):
     require('products')
-    query='SELECT * FROM products WHERE active'
+    if include_inactive: require_role(authorization,'ADMIN')
+    query='SELECT * FROM products' + ('' if include_inactive else ' WHERE active')
     params={}
     if q:
         query+=' AND name ILIKE :like'
         params['like']=f'%{q}%'
     with engine.connect() as c: rows=c.execute(text(query+' ORDER BY id'),params).mappings().all()
     return [dict(r) for r in rows]
-async def get_product(id,quotation=False):
+async def get_product(id,quotation=False,include_inactive=False):
     global CACHE_DOWN_UNTIL
     require('products'); key=f'products:v1:{id}'
     started=time.perf_counter()
-    if not quotation:
+    if not quotation and not include_inactive:
       if cache and time.monotonic()>=CACHE_DOWN_UNTIL:
         try:
           hit=await asyncio.wait_for(asyncio.to_thread(cache.get,key),timeout=.35)
@@ -312,10 +356,11 @@ async def get_product(id,quotation=False):
           CACHE_METRICS['fallbacks']+=1; CACHE_METRICS['misses']+=1
       else:
         CACHE_METRICS['fallbacks']+=1; CACHE_METRICS['misses']+=1
-    with engine.connect() as c: row=c.execute(text('SELECT * FROM products WHERE id=:id AND active'),{'id':id}).mappings().first()
+    sql='SELECT * FROM products WHERE id=:id' + ('' if include_inactive else ' AND active')
+    with engine.connect() as c: row=c.execute(text(sql),{'id':id}).mappings().first()
     if not row: raise HTTPException(404,'Product not found')
     out=dict(row)
-    if not quotation:
+    if not quotation and not include_inactive:
       if cache and time.monotonic()>=CACHE_DOWN_UNTIL:
         try: await asyncio.wait_for(asyncio.to_thread(cache.setex,key,300,json.dumps(out,default=str)),timeout=.35)
         except Exception:
@@ -333,7 +378,10 @@ def cache_metrics(authorization:str|None=Header(None)):
     total=CACHE_METRICS['hits']+CACHE_METRICS['misses']
     return {**{k:v for k,v in CACHE_METRICS.items() if k!='durations_ms'},'hit_rate':CACHE_METRICS['hits']/total if total else 0,'p50_ms':percentile(.50),'p95_ms':percentile(.95)}
 @app.get('/products/{id}')
-async def product_get(id:int): return await get_product(id)
+async def product_get(id:int,include_inactive:bool=False,authorization:str|None=Header(None)):
+    require('products')
+    if include_inactive: require_role(authorization,'ADMIN')
+    return await get_product(id,include_inactive=include_inactive)
 @app.get('/products/{id}/quotation')
 async def quotation(id:int,x_internal_token:str|None=Header(None,alias='X-Internal-Token')):
     require('products'); require_internal(x_internal_token); return await get_product(id,True)
@@ -355,6 +403,17 @@ def product_deactivate(id:int,authorization:str|None=Header(None)):
       if cache: cache.delete(f'products:v1:{id}')
     except Exception: pass
     return {'id':id,'active':False}
+@app.post('/products/{id}/activate')
+def product_activate(id:int,authorization:str|None=Header(None)):
+    require('products'); require_role(authorization,'ADMIN')
+    with engine.begin() as c:
+      r=c.execute(text('UPDATE products SET active=TRUE,version=version+1,updated_at=now() WHERE id=:id AND active=FALSE RETURNING id,active,version'),{'id':id}).mappings().first()
+      if not r: r=c.execute(text('SELECT id,active,version FROM products WHERE id=:id'),{'id':id}).mappings().first()
+    if not r: raise HTTPException(404,'Product not found')
+    try:
+      if cache: cache.delete(f'products:v1:{id}')
+    except Exception: pass
+    return dict(r)
 
 @app.post('/customers',status_code=201)
 def customer_create(body:CustomerIn,authorization:str|None=Header(None)):
@@ -429,9 +488,8 @@ def inventory_reservations(authorization:str|None=Header(None)):
     require('inventory'); require_role(authorization,'ADMIN')
     with engine.connect() as c: return [dict(r) for r in c.execute(text('SELECT * FROM reservations ORDER BY expires_at DESC LIMIT 200')).mappings()]
 @app.get('/inventory/movements')
-def inventory_movements(authorization:str|None=Header(None),limit:int=100,offset:int=0):
+def inventory_movements(authorization:str|None=Header(None),limit:int=Query(default=100,ge=1,le=200),offset:int=Query(default=0,ge=0)):
     require('inventory'); require_role(authorization,'ADMIN')
-    if not 1<=limit<=200 or offset<0: raise HTTPException(422,'Paginación inválida')
     with engine.connect() as c: return [dict(r) for r in c.execute(text('SELECT * FROM movements ORDER BY created_at DESC LIMIT :limit OFFSET :offset'),{'limit':limit,'offset':offset}).mappings()]
 @app.post('/inventory/reservations/{loan_id}/deliver')
 def delivery(loan_id:str,authorization:str|None=Header(None)):
@@ -453,8 +511,8 @@ def cancel_loan(loan_id:str,authorization:str|None=Header(None)):
       c.execute(text("INSERT INTO outbox(event_id,type,correlation_id,loan_id,payload) VALUES(:e,'LiberarReserva',:c,:id,CAST(:payload AS JSONB))"),{'e':str(uuid.uuid4()),'c':loan_id,'id':loan_id,'payload':json.dumps({'producto_id':r['product_id'],'cantidad':r['quantity']})})
     return {'id':loan_id,'status':'CANCELACION_PENDIENTE'}
 
-@app.post('/loans')
-@app.post('/prestamos')
+@app.post('/loans',deprecated=True,summary='Alias compatible de POST /prestamos',responses={202:{'description':'Solicitud favorable aceptada y pendiente de confirmación de inventario'}})
+@app.post('/prestamos',responses={202:{'description':'Solicitud favorable aceptada y pendiente de confirmación de inventario'}})
 def loan_create(body:LoanIn,response:Response,idempotency_key:str=Header(alias='Idempotency-Key'),authorization:str|None=Header(None)):
     require('loans'); actor=require_role(authorization,'ADMIN','CUSTOMER')
     if actor['role']=='CUSTOMER' and actor.get('customer_id')!=body.customer_id: raise HTTPException(403,'Solo puedes solicitar para tu propia cuenta')
@@ -468,7 +526,7 @@ def loan_create(body:LoanIn,response:Response,idempotency_key:str=Header(alias='
       customer=httpx.get(os.getenv('CUSTOMERS_URL','http://customers:8000')+f'/customers/{body.customer_id}',headers=internal_headers,timeout=3).raise_for_status().json()
       product=httpx.get(os.getenv('PRODUCTS_URL','http://products:8000')+f'/products/{body.product_id}/quotation',headers=internal_headers,timeout=3).raise_for_status().json()
     except httpx.HTTPStatusError as e: raise HTTPException(e.response.status_code,e.response.text)
-    except Exception as e: raise HTTPException(503,f'Dependent service unavailable: {e}')
+    except Exception: raise HTTPException(503,'A dependent service is unavailable')
     price=int(product['price_cop']); amount=price*body.quantity
     if amount>1_000_000_000: raise HTTPException(422,'Loan amount exceeds the supported range')
     rate=.018; n=body.term_months; payment=round(amount*rate*(1+rate)**n/((1+rate)**n-1),2)
@@ -490,7 +548,7 @@ def loan_create(body:LoanIn,response:Response,idempotency_key:str=Header(alias='
       raise HTTPException(409,str(e))
     response.status_code=202 if accepted else 200
     return {'id':loan,'status':status,'reason':reason,'probabilidad_incumplimiento':p,'decision_riesgo':'FAVORABLE' if risk_favorable else 'DESFAVORABLE','model_version':m['model_version'],'price_cop':price,'product_version':product['version']}
-@app.get('/loans/{id}')
+@app.get('/loans/{id}',deprecated=True,summary='Alias compatible de GET /prestamos/{id}')
 @app.get('/prestamos/{id}')
 def loan_get(id:str,authorization:str|None=Header(None)):
     require('loans'); actor=require_role(authorization,'ADMIN','CUSTOMER')
@@ -498,9 +556,8 @@ def loan_get(id:str,authorization:str|None=Header(None)):
     if actor['role']=='CUSTOMER' and result['customer_id']!=actor.get('customer_id'): raise HTTPException(403,'No puedes consultar una solicitud ajena')
     return result
 @app.get('/prestamos')
-def loan_list(authorization:str|None=Header(None),limit:int=100,offset:int=0):
+def loan_list(authorization:str|None=Header(None),limit:int=Query(default=100,ge=1,le=200),offset:int=Query(default=0,ge=0)):
     require('loans'); actor=require_role(authorization,'ADMIN','CUSTOMER')
-    if not 1<=limit<=200 or offset<0: raise HTTPException(422,'Paginación inválida')
     query='SELECT * FROM loans ORDER BY created_at DESC LIMIT :limit OFFSET :offset'; params={'limit':limit,'offset':offset}
     if actor['role']=='CUSTOMER': query='SELECT * FROM loans WHERE customer_id=:customer ORDER BY created_at DESC LIMIT :limit OFFSET :offset'; params['customer']=actor.get('customer_id')
     with engine.connect() as c: rows=c.execute(text(query),params).mappings().all()
@@ -515,10 +572,13 @@ def loan_dict(r):
     d=dict(r); d['probabilidad_incumplimiento']=d.pop('probability'); d['decision_riesgo']='FAVORABLE' if d['probabilidad_incumplimiento']<d['threshold'] else 'DESFAVORABLE'; return d
 @app.get('/modelo/info')
 def model_info(authorization:str|None=Header(None)):
-    require('loans'); require_role(authorization,'ADMIN')
-    if app.state.model is None: raise HTTPException(503,'No model promoted')
-    return {k:app.state.manifest[k] for k in ['model_version','run_id','features','threshold']}
-@app.get('/drift')
+    require('loans'); actor=require_role(authorization,'ADMIN','CUSTOMER')
+    if app.state.model is None or not app.state.manifest:
+      return {'available':False,'model_version':None}
+    public={'available':True,'model_version':app.state.manifest['model_version']}
+    if actor['role']=='CUSTOMER': return public
+    return {**public, **{k:app.state.manifest[k] for k in ['run_id','features','threshold']}}
+@app.get('/drift',deprecated=True,summary='Alias compatible de GET /monitoring/drift')
 @app.get('/monitoring/drift')
 def drift_report(authorization:str|None=Header(None)):
     require('loans'); require_role(authorization,'ADMIN')
@@ -538,3 +598,93 @@ def risk_predict(body:RiskIn,authorization:str|None=Header(None),x_internal_toke
 
 def require(name):
     if SERVICE!=name: raise HTTPException(404,'Not found')
+
+
+# Ownership manifest for the shared implementation. Each container exposes only
+# its own domain operations in OpenAPI; health/readiness remain cross-service.
+ROUTE_OWNERS={
+    ('GET','/health'):'shared', ('GET','/ready'):'shared',
+    ('POST','/auth/register'):'customers', ('POST','/auth/login'):'customers', ('GET','/auth/me'):'customers',
+    ('POST','/products'):'products', ('GET','/products'):'products', ('GET','/cache/metrics'):'products',
+    ('GET','/products/{id}'):'products', ('GET','/products/{id}/quotation'):'products',
+    ('PUT','/products/{id}'):'products', ('POST','/products/{id}/deactivate'):'products', ('POST','/products/{id}/activate'):'products',
+    ('POST','/customers'):'customers', ('GET','/customers'):'customers',
+    ('GET','/customers/{id}'):'customers', ('PUT','/customers/{id}'):'customers', ('POST','/customers/import'):'customers',
+    ('POST','/inventory/stock'):'inventory', ('GET','/inventory'):'inventory',
+    ('GET','/inventory/reservations'):'inventory', ('GET','/inventory/movements'):'inventory',
+    ('POST','/inventory/reservations/{loan_id}/deliver'):'inventory',
+    ('POST','/loans'):'loans', ('POST','/prestamos'):'loans',
+    ('GET','/loans/{id}'):'loans', ('GET','/prestamos/{id}'):'loans', ('GET','/prestamos'):'loans',
+    ('POST','/prestamos/{loan_id}/cancel'):'loans',
+    ('GET','/modelo/info'):'loans', ('GET','/drift'):'loans', ('GET','/monitoring/drift'):'loans',
+    ('POST','/riesgo/predict'):'loans',
+}
+
+# FastAPI's generated schema includes validation errors, but domain HTTPException
+# statuses and the dynamic 202 response need explicit contract documentation.
+HTTP_ERROR_DESCRIPTIONS={
+    401:'Autenticación requerida o credencial/token inválido.',
+    403:'El rol o la identidad autenticada no tiene permiso para esta operación.',
+    404:'El recurso o dependencia solicitada no existe o no está disponible.',
+    409:'Conflicto de estado o clave idempotente reutilizada con otro cuerpo.',
+    503:'Una dependencia necesaria no está disponible.',
+}
+ROUTE_HTTP_ERRORS={
+    ('GET','/ready'):(503,),
+    ('POST','/auth/register'):(409,), ('POST','/auth/login'):(401,), ('GET','/auth/me'):(401,),
+    ('POST','/products'):(401,403), ('GET','/products'):(401,403), ('GET','/cache/metrics'):(401,403),
+    ('GET','/products/{id}'):(401,403,404), ('GET','/products/{id}/quotation'):(401,404),
+    ('PUT','/products/{id}'):(401,403,404), ('POST','/products/{id}/deactivate'):(401,403,404),
+    ('POST','/products/{id}/activate'):(401,403,404),
+    ('POST','/customers'):(401,403), ('GET','/customers'):(401,403),
+    ('GET','/customers/{id}'):(401,403,404), ('PUT','/customers/{id}'):(401,403,404),
+    ('POST','/customers/import'):(401,403),
+    ('POST','/inventory/stock'):(401,403), ('GET','/inventory'):(401,403),
+    ('GET','/inventory/reservations'):(401,403), ('GET','/inventory/movements'):(401,403),
+    ('POST','/inventory/reservations/{loan_id}/deliver'):(401,403,404,409),
+    ('POST','/prestamos'):(202,401,403,404,409,503), ('POST','/loans'):(202,401,403,404,409,503),
+    ('GET','/prestamos'):(401,403), ('GET','/prestamos/{id}'):(401,403,404),
+    ('GET','/loans/{id}'):(401,403,404), ('POST','/prestamos/{loan_id}/cancel'):(401,403,409),
+    ('GET','/modelo/info'):(401,403), ('GET','/monitoring/drift'):(401,403,503),
+    ('GET','/drift'):(401,403,503), ('POST','/riesgo/predict'):(401,503),
+}
+
+def build_service_openapi(service_name:str)->dict:
+    if service_name not in {'products','customers','loans','inventory'}:
+      raise ValueError(f'Unknown CrediMarket service: {service_name}')
+    routes=[]
+    seen=set()
+    for route in app.routes:
+      if not isinstance(route,APIRoute): continue
+      keys={(method,route.path) for method in route.methods or set()}
+      owners={ROUTE_OWNERS.get(key) for key in keys}
+      if None in owners:
+        missing=sorted(key for key in keys if key not in ROUTE_OWNERS)
+        raise RuntimeError(f'OpenAPI ownership missing for {missing}')
+      if len(owners)>1:
+        raise RuntimeError(f'Route methods have mixed ownership and must be split: {sorted(keys)}')
+      owner=next(iter(owners))
+      if owner in ('shared',service_name):
+        routes.append(route); seen.update(keys)
+    expected={key for key,owner in ROUTE_OWNERS.items() if owner in ('shared',service_name)}
+    if seen != expected:
+      missing=sorted(expected-seen)
+      raise RuntimeError(f'OpenAPI route manifest mismatch for {service_name}: {missing}')
+    schema=get_openapi(title=f'CrediMarket {service_name.title()}',version='1.0.0',routes=routes)
+    for (method,path),codes in ROUTE_HTTP_ERRORS.items():
+      operation=schema.get('paths',{}).get(path,{}).get(method.lower())
+      if operation is None: continue
+      for code in codes:
+        if code==202:
+          operation['responses'].setdefault('202',{'description':'Solicitud aceptada; resultado de inventario pendiente.'})
+        else:
+          operation['responses'].setdefault(str(code),{'description':HTTP_ERROR_DESCRIPTIONS[code],
+            'content':{'application/json':{'schema':{'type':'object','properties':{'detail':{'type':'string'}},'required':['detail']}}}})
+    return schema
+
+def service_openapi()->dict:
+    if app.openapi_schema is None:
+      app.openapi_schema=build_service_openapi(SERVICE)
+    return app.openapi_schema
+
+app.openapi=service_openapi

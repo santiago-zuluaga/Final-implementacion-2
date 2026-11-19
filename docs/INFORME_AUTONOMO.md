@@ -4,15 +4,15 @@
 
 ## Estado
 
-La solución implementa los cuatro dominios, su integración y los artefactos principales. Hay 72 requisitos trazados: 71 obligatorios y 1 recomendado. Están verificados 46/71 obligatorios (64,8%) y 47/72 al contar también el recomendado (65,3%). De los 16 casos de aceptación, 13 están verificados. No se presenta como cumplimiento del 100%.
+La solución implementa los cuatro dominios, su integración y los artefactos principales. Hay 72 requisitos trazados: 71 obligatorios y 1 recomendado. Están verificados 56/71 obligatorios (78,9%) y 57/72 al contar también el recomendado (79,2%). De los 16 casos de aceptación, 13 están verificados y ACC-14–16 siguen pendientes de validación visual. No se presenta como cumplimiento del 100%.
 
 | Categoría | Requeridos | Implementados | Verificados | Pendientes |
 |---|---:|---:|---:|---:|
-| Requisitos obligatorios | 71 | 71 | 46 | 25 sin verificación, 0 bloqueados |
+| Requisitos obligatorios | 71 | 71 | 56 | 15 sin verificación, 0 bloqueados |
 | Requisito recomendado | 1 | 1 | 1 | 0 |
-| Total trazado | 72 | 72 | 47 | 25 sin verificación, 0 bloqueados |
+| Total trazado | 72 | 72 | 57 | 15 sin verificación, 0 bloqueados |
 
-El conteo sale de las 72 filas de la matriz: 47 `VERIFICADO`, 25 `IMPLEMENTADO_NO_VERIFICADO` y 0 `BLOQUEADO`. El porcentaje obligatorio es 46/71 = 64,8%; el total que incluye el requisito recomendado es 47/72 = 65,3%. “Implementados” suma los verificados y los implementados que aún requieren evidencia. TEAM-01 refleja la modalidad individual indicada por Santiago; el texto genérico del enunciado §2 describe equipos de hasta cuatro.
+El conteo sale de las 72 filas de la matriz: 57 `VERIFICADO`, 15 `IMPLEMENTADO_NO_VERIFICADO` y 0 `BLOQUEADO`. El porcentaje obligatorio es 56/71 = 78,9%; el total que incluye el requisito recomendado es 57/72 = 79,2%. “Implementados” suma los verificados y los implementados que aún requieren evidencia. TEAM-01 refleja la modalidad individual indicada por Santiago; el texto genérico del enunciado §2 describe equipos de hasta cuatro.
 
 ## Arquitectura y operación
 
@@ -30,7 +30,8 @@ La equivalencia local/API en las 200 solicitudes tuvo cero mismatches y error ab
 
 ## Verificaciones recientes
 
-- `pytest -q`: 13 aprobados; incluye roles, ownership, JWT vencido y rechazo de token interno incorrecto.
+- `pytest -q`: 34 aprobados; incluye roles, ownership, JWT vencido, rechazo de token interno incorrecto, contratos OpenAPI, drift y rol CUSTOMER en operaciones administrativas de Inventario.
+- ARQ-05: verificado por evidencia técnica previa y validación visual reportada por Santiago para los flujos ADMIN/CUSTOMER, préstamos/detalle y modelo; el reporte manual se atribuye al usuario y no a inspección visual de Codex.
 - Build frontend TypeScript/Vite correcto.
 - Compose completo healthy; reinicio de PostgreSQL conservó el catálogo y el login ADMIN.
 - Caché: 30 misses p50/p95 4,303/6,290 ms y 200 hits 1,743/2,991 ms. Prueba separada de caída mantuvo respuestas desde PostgreSQL y recuperación miss/hit; snapshots CPU/memoria y límites están en [INFORME_REDIS.md](INFORME_REDIS.md).
@@ -48,7 +49,7 @@ La equivalencia local/API en las 200 solicitudes tuvo cero mismatches y error ab
 
 - Aceptación 14, 15 y 16 requieren comprobar el flujo visual desde frontend, polling de estado, expiración/mensajes y errores de API. El navegador integrado rechazó `http://localhost:8080` por una configuración guardada de permisos; no se usó otro navegador ni una vía indirecta.
 - TEAM-01 quedó documentado para la modalidad individual: Santiago Zuluaga Correa es el único autor/integrante y asume arquitectura, backend, frontend, ML, MLOps, infraestructura, integración, pruebas y documentación. El enunciado genérico se refiere a grupos; se conserva esa diferencia en la matriz.
-- Siguen pendientes 25 requisitos implementados sin verificación completa. La auditoría detectó que los cuatro OpenAPI enumeran las mismas 27 rutas; se requiere documentar/exponer correctamente las rutas por dominio y verificar guardas. También siguen pendientes reproducción desde clon limpio y verificación visual del frontend.
+- Siguen pendientes 15 requisitos implementados sin verificación completa: DRIFT-01, API-01, FE-02/03/04/05/07, QA-01/02, DEV-02, DOC-03/04 y ACC-14/15/16. ARQ-03 e IDEM-01/02 se verificaron con OpenAPI/aislamiento, concurrencia real y fallos de ACK antes/después del commit; API-01, frontend y reproducción desde clon limpio conservan sus limitaciones.
 - El entrenamiento completó, con avisos de compatibilidad de opciones del solver de scikit-learn y detección de núcleos físicos de joblib en Windows; no se ocultaron los avisos ni impidieron producir artefactos.
 
 ## Reproducción

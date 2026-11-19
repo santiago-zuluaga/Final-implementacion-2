@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { api } from './api'
 
 export type SessionUser = { username: string; role: 'ADMIN' | 'CUSTOMER'; customer_id: string | null }
 type AuthResponse = { access_token: string; user: SessionUser }
@@ -30,14 +31,11 @@ export default function Access({ onLogin }: { onLogin: (token: string, user: Ses
       }
     }
     try {
-      const response = await fetch(path, {
+      const auth = await api<AuthResponse>(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const data = await response.json()
-      if (!response.ok) throw Error(data.detail || `Error ${response.status}`)
-      const auth = data as AuthResponse
       onLogin(auth.access_token, auth.user)
     } catch (e) {
       setError((e as Error).message)

@@ -74,6 +74,8 @@ asyncio.run(run())
 
 def cleanup(product_id, loan_id):
     lid, pid = repr(loan_id), repr(product_id)
+    command = db_row('loans', "SELECT event_id FROM outbox WHERE loan_id=:id AND type='ReservaSolicitada'", {'id': loan_id})
+    command_event = command['event_id'] if command else None
     loan_code = f"""import os,uuid
 from sqlalchemy import create_engine,text
 e=create_engine(os.environ['DATABASE_URL'])
@@ -91,6 +93,7 @@ with e.begin() as c:
 from sqlalchemy import create_engine,text
 e=create_engine(os.environ['DATABASE_URL'])
 with e.begin() as c:
+ if {command_event!r}: c.execute(text('DELETE FROM processed_messages WHERE event_id=:event'),{{'event':{command_event!r}}})
  for table in ('movements','reservations','outbox'):
   c.execute(text(f'DELETE FROM {{table}} WHERE loan_id=:id'),{{'id':{lid}}})
  c.execute(text('DELETE FROM movements WHERE product_id=:id'),{{'id':{pid}}})
@@ -163,6 +166,7 @@ def main():
         publish_duplicate('inventory', 'credimarket.commands', 'DIRECT', 'reserva.solicitar', command_doc)
         time.sleep(1)
         after_command = counts(loan_id, product_id)
+        command_processed = db_row('inventory', 'SELECT count(*) AS n FROM processed_messages WHERE event_id=:id', {'id': command['event_id']})['n']
 
         event = db_row('inventory', "SELECT event_id,type,correlation_id,loan_id,payload,created_at FROM outbox WHERE loan_id=:id AND type='InventarioReservado'", {'id': loan_id})
         event_doc = {
@@ -173,16 +177,20 @@ def main():
         publish_duplicate('loans', 'credimarket.events', 'TOPIC', 'inventario.reservado', event_doc)
         time.sleep(1)
         final = counts(loan_id, product_id)
+        event_processed = db_row('loans', 'SELECT count(*) AS n FROM processed_messages WHERE event_id=:id', {'id': event['event_id']})['n']
         if initial != after_command or initial != final:
             raise AssertionError(f'Duplicate event changed inventory effects: {initial} -> {after_command} -> {final}')
         if initial['movements'] != 1 or initial['reservations'] != 1 or initial['inventory_events'] != 1 or initial['reservation_status'] != 'RESERVED':
             raise AssertionError(f'Unexpected initial reservation effects: {initial}')
+        if command_processed != 1 or event_processed != 1:
+            raise AssertionError(f'Message event IDs were not recorded exactly once: command={command_processed}, event={event_processed}')
         print(json.dumps({
             'same_key_same_body_same_loan': first.json()['id'] == repeated.json()['id'],
             'same_key_changed_body_status': conflict.status_code,
             'initial_effects': initial,
             'effects_after_duplicate_command': after_command,
             'effects_after_duplicate_event': final,
+            'processed_message_rows': {'inventory_command': command_processed, 'loan_event': event_processed},
             'temporary_rows_cleanup': 'completed',
         }, indent=2))
     finally:

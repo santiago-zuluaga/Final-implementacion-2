@@ -30,6 +30,10 @@ Con el mismo fixture COMPLETADA, `.venv\Scripts\python.exe scripts\acceptance_id
 
 Con RabbitMQ Management accesible y la DLQ `inventory.commands.dlq` vacía, `.venv\Scripts\python.exe scripts\acceptance_retry_dlq.py` provoca un rollback dentro de la transacción, espera los tres reintentos y retira del DLQ solo su mensaje de prueba. Se detiene con seguridad si la cola ya contiene fallos.
 
+Con credenciales ADMIN locales válidas, `.venv\Scripts\python.exe scripts\acceptance_message_ack.py` requiere `inventory.commands` vacía, detiene solo Inventario, confirma una orden y cierra el canal sin ACK para forzar redelivery; reinicia Inventario y elimina únicamente los registros del fixture si RabbitMQ queda drenado. No elimina volúmenes.
+
+`.venv\Scripts\python.exe scripts\acceptance_frontend_customers.py` registra un cliente temporal, comprueba GET/PUT propios y bloqueos de ownership/importación CUSTOMER, importa filas CSV ADMIN válidas/actualizadas/invalidas y elimina exclusivamente sus perfiles y credenciales.
+
 `.venv\Scripts\python.exe scripts\acceptance_model_promotion.py` promueve v2, reinicia Préstamos y consulta `/modelo/info` con ADMIN; luego revierte a v1, repite el reinicio y deja el puntero en v1.
 
 `.venv\Scripts\python.exe ml\audit_mlflow.py` audita los parámetros, métricas de train/validación/test y artefactos del run de v1 seleccionado. El test no reinicia MLflow; la evidencia de persistencia del restart se registra en `EXECUTION_LOG.md`.
@@ -42,6 +46,6 @@ Con RabbitMQ Management accesible y la DLQ `inventory.commands.dlq` vacía, `.ve
 
 ## Evidencia actual
 
-El registro fechado, con cantidades y límites, está en [EXECUTION_LOG.md](EXECUTION_LOG.md); los 16 casos académicos y su estado están en [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md). En el corte local del 18-11-2026, pytest dio 13 passed, build web pasó, equivalencia fue 200/200 con error máximo `2.22e-16`, y las pruebas de stock, idempotencia, recuperación, expiración, retry/DLQ y CSV quedaron registradas. Permanecen sin verificación visual los casos de frontend 14–16.
+El registro fechado, con cantidades y límites, está en [EXECUTION_LOG.md](EXECUTION_LOG.md); los 16 casos académicos y su estado están en [PRUEBAS_ACEPTACION.md](PRUEBAS_ACEPTACION.md). En el corte local del 18-11-2026, pytest dio 34 passed; el filtro frontend dirigido dio 9 passed; el build web pasó; equivalencia fue 200/200 con error máximo `2.22e-16`; y las pruebas de concurrencia, idempotencia, recuperación, expiración, retry/DLQ y perfil/CSV quedaron registradas. Permanecen sin verificación visual los casos de frontend 14–16.
 
 Un build exitoso o un endpoint sano no equivale a pasar el caso de aceptación. Registrar los datos observados y mantener el caso como no verificado hasta cumplir el resultado esperado.

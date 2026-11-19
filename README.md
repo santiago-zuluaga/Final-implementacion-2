@@ -10,7 +10,7 @@ Hay cuatro APIs FastAPI independientes (cada contenedor se ejecuta con rol y bas
 
 - Docker Desktop con el motor Linux activo y Docker Compose v2.
 - Git.
-- Para entrenar fuera de Docker: Python 3.13; para compilar la interfaz: Node 22.
+- Para entrenar fuera de Docker: Python 3.13; para desarrollar/probar la interfaz: Node.js 22.6 o posterior.
 
 ## Arranque integrado
 
@@ -53,14 +53,18 @@ python ml/promote.py v1
 
 Si MLflow no está disponible, el script conserva el experimento localmente con los manifiestos e informe, pero el criterio de Tracking no se considera satisfecho hasta registrar las corridas en el servidor. `models/active.json` apunta a una versión por nombre; la API carga esa versión al iniciar y verifica el SHA-256 del artefacto. `v2` es otro candidato seleccionado exclusivamente con validación; no se usa el test para seleccionarlo.
 
+El flujo completo, persistencia y comandos para reproducir, auditar, promover y revertir están en [docs/ML_PIPELINE.md](docs/ML_PIPELINE.md). La guía no afirma que el flujo se haya probado desde un clon limpio.
+
 ## Scripts de verificación
 
 ```powershell
 python -m compileall -q domain_service loan_service ml
 python ml/drift.py
 python ml/equivalence.py --url http://localhost:8003
-cd frontend; npm ci; npm run build; npm audit --omit=dev
+cd frontend; npm ci; npm test; npm run build; npm audit --omit=dev
 ```
+
+Para desarrollar la UI fuera de Docker, ejecuta `npm run dev`; Vite proxya `/api/*` a las APIs locales publicadas en los puertos 8001–8004. Los destinos pueden cambiarse con `VITE_PRODUCTS_API_URL`, `VITE_CUSTOMERS_API_URL`, `VITE_LOANS_API_URL` y `VITE_INVENTORY_API_URL`. En Docker, Nginx proxya las mismas rutas dentro de la red Compose.
 
 La importación de clientes requiere un CSV con columnas del histórico. La API hace upsert por `cliente_id`; repetir el mismo archivo no crea duplicados.
 

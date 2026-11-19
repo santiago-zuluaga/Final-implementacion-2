@@ -2,7 +2,7 @@
 
 ## Servicios
 
-`domain_service/app.py` se despliega como cuatro procesos/contenedores independientes con `SERVICE=products|customers|loans|inventory`. Cada despliegue usa su propia base de datos PostgreSQL y rol restringido. Los servicios solo se comunican por HTTP o RabbitMQ; no consultan bases de datos ajenas.
+`domain_service/app.py` se despliega como cuatro procesos/contenedores independientes con `SERVICE=products|customers|loans|inventory`. Cada despliegue usa su propia base de datos PostgreSQL y rol restringido. El manifiesto de propiedad método/path genera un OpenAPI distinto para cada instancia; `/health` y `/ready` son las únicas operaciones compartidas. Los aliases históricos de Préstamos se mantienen marcados como obsoletos. Los handlers de otros dominios responden 404 por la guarda `require(SERVICE)`. Los servicios se comunican por HTTP interno autenticado o RabbitMQ; no consultan bases de datos ajenas.
 
 ```mermaid
 flowchart LR
@@ -34,10 +34,61 @@ flowchart LR
 
 Estados principales: `RECHAZADA`, `PENDIENTE_INVENTARIO`, `APROBADA`, `CANCELADA_SIN_STOCK`, `CANCELACION_PENDIENTE`, `CANCELADA`, `COMPLETADA`. La reserva es la fuente de verdad para aprobar y entregar.
 
+### Secuencia de solicitud y actualización asíncrona
+
+```mermaid
+sequenceDiagram
+  actor Cliente
+  participant UI as React / Nginx
+  participant L as Préstamos
+  participant C as Clientes API
+  participant P as Productos API
+  participant Q as RabbitMQ
+  participant I as Inventario
+  Cliente->>UI: Enviar solicitud + Idempotency-Key
+  UI->>L: POST /prestamos (JWT)
+  L->>C: GET perfil (HTTP interno autenticado)
+  L->>P: GET cotización vigente (HTTP interno autenticado)
+  L->>L: Evaluar modelo y guardar préstamo + outbox
+  L-->>UI: 202 + ID + PENDIENTE_INVENTARIO
+  L->>Q: Publicar ReservaSolicitada (confirm)
+  Q->>I: reserva.solicitar
+  I->>I: Deduplicar + actualizar stock/reserva/movimiento/outbox en transacción
+  I-->>Q: ACK posterior al commit local
+  I->>Q: Publicar InventarioReservado o InventarioInsuficiente
+  Q->>L: Entregar evento
+  L->>L: Deduplicar + cambiar estado en transacción
+  UI->>L: GET /prestamos/{id} con JWT durante polling
+  L-->>UI: Estado actualizado, solo si es propio o ADMIN
+```
+
+### Diagrama de estados
+
+```mermaid
+stateDiagram-v2
+  [*] --> PENDIENTE_INVENTARIO: riesgo favorable / 202
+  [*] --> RECHAZADA: riesgo o datos no elegibles
+  PENDIENTE_INVENTARIO --> APROBADA: InventarioReservado
+  PENDIENTE_INVENTARIO --> CANCELADA_SIN_STOCK: InventarioInsuficiente
+  PENDIENTE_INVENTARIO --> CANCELACION_PENDIENTE: cancelación o timeout
+  CANCELACION_PENDIENTE --> CANCELADA: ReservaLiberada
+  APROBADA --> CANCELACION_PENDIENTE: cancelación
+  APROBADA --> CANCELADA: ReservaVencida
+  APROBADA --> COMPLETADA: SalidaConfirmada
+  CANCELADA_SIN_STOCK --> [*]
+  RECHAZADA --> [*]
+  CANCELADA --> [*]
+  COMPLETADA --> [*]
+```
+
+Un evento tardío se registra por `event_id`, pero solo avanza una transición permitida para el estado actual. Si se cancela mientras la reserva aún no llega, la liberación se conserva en outbox y compensa una reserva que se procese después; el caso de evento tardío y expiración se ejecuta en `scripts/acceptance_cancel_late.py`.
+
 ## Redis
 
 Productos usa `productos:v1:{id}`, TTL de 300 segundos. Un hit se responde desde Redis; miss consulta PostgreSQL y llena el caché. Actualizar/desactivar confirma primero PostgreSQL y luego invalida. Fallo de Redis cae a la BD con timeout de socket de 200 ms. `/cache/metrics` publica hits, misses, fallback, tasa de aciertos, p50 y p95 del proceso actual. `/products/{id}/quotation` lee siempre la BD.
 
-## Límites que siguen pendientes
+## Límites de arquitectura
 
-No hay login ni autorización por usuario; los roles administrativos aún no están protegidos por JWT. La entrega/cancelación carece de autorización de administrador. RabbitMQ tiene publisher confirms, outbox, colas durables y consumidores idempotentes; aún falta configurar reintentos limitados y DLQ con evidencia. No hay migraciones versionadas; las tablas se crean al iniciar. La UI es real pero todavía no presenta controles para crear producto, registrar stock, entregar o cancelar. Estos puntos están también en `estado.md`.
+- Los cuatro contenedores comparten el módulo de implementación `domain_service/app.py`; la separación se aplica por configuración `SERVICE`, propietario explícito de ruta, guardas de ejecución, roles y bases de datos. `loan_service/app.py` es código legado no utilizado por el entrypoint de Compose.
+- Las tablas se crean al iniciar; no hay migraciones versionadas.
+- Los demás requisitos aún no verificados están enumerados con su evidencia faltante en `MATRIZ_CUMPLIMIENTO.md` y `estado.md`.

@@ -213,8 +213,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.03881502151489258,
-      "mlflow_run_id": "5430c5bd096c4dbf9890d63d7743e416"
+      "duration_seconds": 0.06374549865722656,
+      "mlflow_run_id": "b066f848d43646ccb03178ae53061f91"
     },
     {
       "name": "logreg_c1",
@@ -254,8 +254,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.04136157035827637,
-      "mlflow_run_id": "3f1f7700afce493ead45d5aa6059d46f"
+      "duration_seconds": 0.1087503433227539,
+      "mlflow_run_id": "549451ed773a4a59b21af7280711e459"
     },
     {
       "name": "logreg_c05",
@@ -295,8 +295,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.06376242637634277,
-      "mlflow_run_id": "6d4ba9a990454f3abfd3dee2a877d0c8"
+      "duration_seconds": 0.13109397888183594,
+      "mlflow_run_id": "3459c5b0b92e47b7b4a071a222fd1f07"
     },
     {
       "name": "tree_d5",
@@ -336,8 +336,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.06126880645751953,
-      "mlflow_run_id": "840ab07b734e4a2da70ee3329a0232f3"
+      "duration_seconds": 0.0765228271484375,
+      "mlflow_run_id": "b385c9b081ac4d7dbf717310ccfa4f72"
     },
     {
       "name": "tree_d8",
@@ -377,8 +377,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.07118105888366699,
-      "mlflow_run_id": "b5d6cddf53494d2095139b9b26846905"
+      "duration_seconds": 0.07666206359863281,
+      "mlflow_run_id": "3fae955603544046a46a27df2bafca76"
     },
     {
       "name": "forest_300",
@@ -418,8 +418,8 @@
           ]
         ]
       },
-      "duration_seconds": 1.2032546997070312,
-      "mlflow_run_id": "8c44724c8551428884b09994f07dab97"
+      "duration_seconds": 1.3373589515686035,
+      "mlflow_run_id": "449fe50140654648addb2bfa57bebd2f"
     },
     {
       "name": "forest_500",
@@ -459,8 +459,8 @@
           ]
         ]
       },
-      "duration_seconds": 2.0146989822387695,
-      "mlflow_run_id": "f4d2626d7aa44348b4097a2e595f4999"
+      "duration_seconds": 2.416858196258545,
+      "mlflow_run_id": "e67c65d476e348468e110ad056cb7bf9"
     },
     {
       "name": "hist_150",
@@ -500,8 +500,8 @@
           ]
         ]
       },
-      "duration_seconds": 0.33644628524780273,
-      "mlflow_run_id": "72171b67e4a146cb9224350e5434d842"
+      "duration_seconds": 0.5990064144134521,
+      "mlflow_run_id": "79e1a11011ad4c55a3f3ed06a43dc377"
     }
   ],
   "selected": "logreg_c1",

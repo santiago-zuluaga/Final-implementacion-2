@@ -67,6 +67,31 @@ def test_customer_cannot_request_a_loan_for_another_customer(monkeypatch):
         service.SERVICE = previous
 
 
+def test_customer_cannot_access_administrative_inventory_operations(monkeypatch):
+    monkeypatch.setenv('JWT_SECRET', 'unit-test-jwt-secret-not-for-production-123456789')
+    import domain_service.app as service
+    previous = service.SERVICE
+    service.SERVICE = 'inventory'
+    try:
+        customer_token = security.issue_token('ana', 'CUSTOMER', 'C-1')
+        headers = {'Authorization': f'Bearer {customer_token}'}
+
+        async def requests():
+            transport = httpx.ASGITransport(app=service.app)
+            async with httpx.AsyncClient(transport=transport, base_url='http://service.test') as client:
+                return [
+                    (await client.get('/inventory', headers=headers)).status_code,
+                    (await client.get('/inventory/reservations', headers=headers)).status_code,
+                    (await client.get('/inventory/movements', headers=headers)).status_code,
+                    (await client.post('/inventory/stock', headers=headers, json={'product_id': 1, 'quantity': 1})).status_code,
+                    (await client.post('/inventory/reservations/not-owned/deliver', headers=headers)).status_code,
+                ]
+
+        assert asyncio.run(requests()) == [403, 403, 403, 403, 403]
+    finally:
+        service.SERVICE = previous
+
+
 def test_expired_jwt_is_rejected_by_protected_route(monkeypatch):
     monkeypatch.setenv('JWT_SECRET', 'unit-test-jwt-secret-not-for-production-123456789')
     import domain_service.app as service

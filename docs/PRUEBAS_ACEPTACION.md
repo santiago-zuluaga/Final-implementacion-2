@@ -9,9 +9,15 @@ Fuente de los casos: sección 12 del enunciado del profesor. El estado refleja e
 | Seguridad de sesión/token | Correcto | JWT vencido rechazado por ruta protegida (401); token interno incorrecto rechazado (401); tests existentes verifican rol y ownership. Auditoría confirmó `.env` fuera del historial Git y valores locales ausentes de archivos tracked. |
 | Aislamiento PostgreSQL | Correcto | `has_database_privilege` comprobó CONNECT propio en cada una de las cuatro bases y denegó los 12 pares rol/base cruzados. Se revocó CONNECT de PUBLIC y se agregó al init para clústeres nuevos. |
 | Persistencia PostgreSQL/RabbitMQ/MLflow | Correcto | PostgreSQL conservó catálogo/login tras restart; publicación persistente en cola durable sobrevivió restart de RabbitMQ; MLflow conservó 17/17 IDs y 137 artefactos existentes al reiniciar. |
-| `python -m pytest -q` | 13 passed, 1 aviso deprecado | Unitarias/ASGI: hashes y JWT, autorización básica, aislamiento de solicitudes por propietario, pipeline de riesgo. |
+| `python -m pytest -q` | 34 passed, 1 aviso deprecado | Unitarias/ASGI: seguridad, ownership, pipeline de riesgo, PSI, OpenAPI y rol CUSTOMER en operaciones administrativas de Inventario. |
+| OpenAPI de Productos/Clientes/Préstamos/Inventario | Correcto | Compose auditado tras la activación de productos: esquema en vivo coincide con manifiesto. Respectivamente: 10/7, 10/8, 12/11 y 7/7 operaciones/paths; solo operaciones propias y health/readiness comunes. Alias de Préstamos marcados deprecated. |
+| `npm --prefix frontend test` | 11 passed en la corrida completa inicial de esta continuación | Incluyó cliente HTTP, detalle/activación de producto y nuevos helpers de préstamo; esa corrida incidental incluyó tests auxiliares de producto y no se usa como evidencia adicional de FE-01. Luego de los cambios FE-02–07 se ejecutaron 9 tests dirigidos que excluyen los nombres de pruebas de producto: 9 passed. |
+| `node --experimental-strip-types --test --test-name-pattern=... frontend/test/api.test.mjs` | 9 passed, 0 fallidos | Sesión/JWT, errores/red, detalle de préstamo, polling de estados y conservación de key/cuerpo idempotente; filtro omitió los tests auxiliares de producto. |
+| `npm run build` | Correcto | TypeScript y Vite produjeron bundle después de los cambios de FE-02–07. |
+| `python scripts/acceptance_frontend_customers.py` | Correcto | Docker real: perfil propio GET/PUT 200; cliente ajeno GET/PUT 403; import CUSTOMER 403; CSV ADMIN insertó 1, actualizó 1, rechazó 1 y devolvió error de fila 4; cleanup aislado. |
+| Proxy frontend + persistencia | Correcto | Vite dev y Nginx producción sirvieron health/lecturas reales de las cuatro APIs; POST de perfil vía Vite proxy y GET posteriores por Vite y Clientes coincidieron. Fixture identificado `ARQ05-FE-PROXY-057d35449ed8`. No prueba interacción visual React. |
 | `npm --prefix frontend run build` | Correcto | TypeScript y Vite produjeron bundle. |
-| Manejo de error del polling frontend | Implementación compilada; visual pendiente | El fallo de GET del estado se muestra en el aviso global y se limpia al recibir una respuesta; no sustituye la verificación de navegador de ACC-15/16. |
+| Manejo de error del polling frontend | Automatizado/compilado; visual pendiente | Todas las solicitudes no terminales de la lista propia se consultan con JWT cada 1,8 s; errores se muestran en aviso global y se reintentan. Prueba Node verifica qué estados son consultables; no sustituye navegador ACC-15. |
 | `python ml/equivalence.py` | Correcto | 200 solicitudes, mismatch 0, error absoluto máximo `2.220446049250313e-16`, tolerancia `1e-9`, modelo `v1`. |
 | `python ml/audit_data.py` | Correcto | Auditoría reproducible de histórico (12.000 × 15) y solicitudes (200 × 14), sin filas duplicadas; SHA-256 en `artifacts/data_audit.json`. |
 | `python ml/audit_mlflow.py` | Correcto | Run seleccionado v1 contiene parámetros requeridos, métricas train/validación/test y artefactos esperados; evidencia en `artifacts/mlflow_audit.json`. |
@@ -50,9 +56,9 @@ El acceso del navegador integrado a `http://localhost:8080` fue rechazado por un
 | 11 | Promoción/rollback de modelo | Aprobado. | Se promovió v2, reinició Préstamos y `/modelo/info` informó v2; alias MLflow `champion` apuntó al run de v2. Rollback a v1, reinicio y API/alias informaron v1. Puntero final v1. |
 | 12 | Importar CSV dos veces sin duplicar | Aprobado. | CSV sintético de una fila: primera importación inserted=1/updated=0/rejected=0; segunda inserted=0/updated=1/rejected=0; se confirmó un solo perfil y se eliminó tras la prueba. |
 | 13 | Cliente no ve préstamos ajenos | Aprobado por prueba manual de API previa: dueño 200, ajeno 403; unitarias verifican solicitud ajena 403. | Conservar el resultado reproducible de integración al ejecutar la suite completa. |
-| 14 | Operación del negocio desde frontend | No verificado por navegador. | La aprobación del origen local fue denegada; requiere validación manual de la interfaz en demo. |
-| 15 | UI refleja transición asíncrona | Backend se probó en flujo feliz previo; UI no verificada visualmente. | Confirmar polling desde frontend contra el broker real. |
-| 16 | Formularios/expiración/API caída con mensaje y recuperación | No verificado completo. | Probar expiración de JWT, formularios inválidos y API/broker desconectados desde UI. |
+| 14 | Operación del negocio desde frontend | No verificado por navegador. | Proxy y endpoints reales pasan; flujo completo React sigue pendiente de inspección visual/interacción real. |
+| 15 | UI refleja transición asíncrona | Backend se probó en flujo feliz previo; polling ampliado y compilado, UI no verificada visualmente. | Confirmar que solicitudes propias pendientes cambien en la tabla React tras evento RabbitMQ. |
+| 16 | Formularios/expiración/API caída con mensaje y recuperación | No verificado completo. | Helpers de sesión/red pasan pruebas automáticas; probar errores de formulario, expiración y caída/recuperación desde UI. |
 
 ## Criterio para cerrar
 

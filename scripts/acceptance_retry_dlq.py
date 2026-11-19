@@ -97,11 +97,12 @@ e=create_engine(os.environ['DATABASE_URL']); product_id={product_id!r}; probe={p
 with e.connect() as c:
  stock=c.execute(text('SELECT product_id,available,reserved FROM stock WHERE product_id=:id'),{{'id':product_id}}).mappings().one()
  result={{'stock':dict(stock),'movements':c.execute(text('SELECT count(*) FROM movements WHERE product_id=:id'),{{'id':product_id}}).scalar(),
- 'outbox':c.execute(text('SELECT count(*) FROM outbox WHERE correlation_id=:probe'),{{'probe':probe}}).scalar()}}
+ 'outbox':c.execute(text('SELECT count(*) FROM outbox WHERE correlation_id=:probe'),{{'probe':probe}}).scalar(),
+ 'processed_marker':c.execute(text('SELECT count(*) FROM processed_messages WHERE event_id=:event'),{{'event':{doc['event_id']!r}}}).scalar()}}
  print(json.dumps(result))
 """
     effects = json.loads(subprocess.run(['docker', 'compose', 'exec', '-T', 'inventory', 'python', '-c', effects_code], cwd=ROOT, check=True, capture_output=True, text=True).stdout)
-    if effects['stock'] != stock_row or effects['movements'] != movements_before or effects['outbox'] != 0:
+    if effects['stock'] != stock_row or effects['movements'] != movements_before or effects['outbox'] != 0 or effects['processed_marker'] != 0:
         raise AssertionError(f'Failed transaction changed data: before={stock_row}/{movements_before}, after={effects}')
     print(json.dumps({
         'initial_dlq_count': initial,
@@ -109,6 +110,7 @@ with e.connect() as c:
         'retry_attempts': headers['attempts'],
         'failure_header': headers['failure'],
         'failed_transaction_left_no_effects': True,
+        'processed_marker_rolled_back': effects['processed_marker'] == 0,
         'probe_removed_from_dlq': True,
     }, indent=2))
 
